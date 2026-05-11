@@ -1,0 +1,81 @@
+import SwiftUI
+
+struct ChatDetailView: View {
+    let chatState: ChatState?
+    @Binding var messageDraft: String
+    let isSendingMessage: Bool
+    let isBlocked: Bool
+    let onToggleBlocked: () -> Void
+    let onSend: () -> Void
+
+    var body: some View {
+        Group {
+            if let chatState {
+                VStack(alignment: .leading, spacing: 0) {
+                    header(for: chatState)
+                    Divider()
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 10) {
+                            ForEach(chatState.messages) { message in
+                                MessageRow(message: message)
+                            }
+                        }
+                        .padding(14)
+                    }
+                    Divider()
+                    composer
+                }
+            } else {
+                ContentUnavailableView(
+                    "No conversation loaded",
+                    systemImage: "message",
+                    description: Text("Refresh chats or start polling to parse WhatsApp.")
+                )
+            }
+        }
+    }
+
+    private var composer: some View {
+        HStack(alignment: .bottom, spacing: 12) {
+            TextField("Write a message", text: $messageDraft, axis: .vertical)
+                .textFieldStyle(.roundedBorder)
+                .lineLimit(1...4)
+
+            Button {
+                onSend()
+            } label: {
+                Label(isSendingMessage ? "Sending..." : "Send", systemImage: "paperplane.fill")
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(isSendingMessage || messageDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
+        .padding(14)
+    }
+
+    private func header(for chatState: ChatState) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(chatState.chat.name)
+                    .font(.title3.weight(.semibold))
+
+                Text("\(chatState.messages.count) recent messages")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            Label(chatState.canSendText ? "Can send" : "Cannot send", systemImage: chatState.canSendText ? "paperplane" : "paperplane.circle")
+                .font(.caption)
+                .foregroundStyle(chatState.canSendText ? .green : .secondary)
+
+            Button {
+                onToggleBlocked()
+            } label: {
+                Label(isBlocked ? "Unblock" : "Block", systemImage: isBlocked ? "checkmark.shield" : "hand.raised")
+            }
+            .buttonStyle(.bordered)
+        }
+        .padding(14)
+    }
+}

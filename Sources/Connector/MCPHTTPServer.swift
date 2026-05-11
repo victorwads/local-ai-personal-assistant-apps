@@ -1,187 +1,17 @@
 import Foundation
 import Network
 
-enum JSONValue: Codable, Equatable {
-    case string(String)
-    case number(Double)
-    case bool(Bool)
-    case object([String: JSONValue])
-    case array([JSONValue])
-    case null
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.singleValueContainer()
-
-        if container.decodeNil() {
-            self = .null
-        } else if let value = try? container.decode(Bool.self) {
-            self = .bool(value)
-        } else if let value = try? container.decode(Double.self) {
-            self = .number(value)
-        } else if let value = try? container.decode(String.self) {
-            self = .string(value)
-        } else if let value = try? container.decode([String: JSONValue].self) {
-            self = .object(value)
-        } else if let value = try? container.decode([JSONValue].self) {
-            self = .array(value)
-        } else {
-            throw DecodingError.typeMismatch(
-                JSONValue.self,
-                .init(codingPath: decoder.codingPath, debugDescription: "Unsupported JSON value.")
-            )
-        }
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.singleValueContainer()
-
-        switch self {
-        case .string(let value):
-            try container.encode(value)
-        case .number(let value):
-            try container.encode(value)
-        case .bool(let value):
-            try container.encode(value)
-        case .object(let value):
-            try container.encode(value)
-        case .array(let value):
-            try container.encode(value)
-        case .null:
-            try container.encodeNil()
-        }
-    }
-
-    var stringValue: String? {
-        if case .string(let value) = self {
-            return value
-        }
-
-        return nil
-    }
-
-    var intValue: Int? {
-        if case .number(let value) = self {
-            return Int(value)
-        }
-
-        return nil
-    }
-
-    static func from(date: Date?) -> JSONValue {
-        guard let date else {
-            return .null
-        }
-
-        return .string(ISO8601DateFormatter().string(from: date))
-    }
-
-    static func from(any value: Any) -> JSONValue? {
-        switch value {
-        case let value as String:
-            return .string(value)
-        case let value as NSNumber:
-            if CFGetTypeID(value) == CFBooleanGetTypeID() {
-                return .bool(value.boolValue)
-            }
-            return .number(value.doubleValue)
-        case let value as Bool:
-            return .bool(value)
-        case let value as [String: Any]:
-            let object = value.compactMapValues { JSONValue.from(any: $0) }
-            return .object(object)
-        case let value as [Any]:
-            return .array(value.compactMap(JSONValue.from(any:)))
-        case _ as NSNull:
-            return .null
-        default:
-            return nil
-        }
-    }
-}
-
-struct MCPToolDefinition {
-    let name: String
-    let description: String
-    let inputSchema: [String: JSONValue]
-
-    var jsonValue: JSONValue {
-        .object([
-            "name": .string(name),
-            "description": .string(description),
-            "inputSchema": .object(inputSchema)
-        ])
-    }
-}
-
-struct MCPToolCall {
-    let name: String
-    let arguments: [String: JSONValue]
-}
-
-struct MCPHTTPRequest {
-    let id: JSONValue?
-    let method: String
-    let params: [String: JSONValue]
-}
-
-private struct IncomingHTTPRequest {
-    let method: String
-    let path: String
-    let body: Data
-}
-
-enum MCPBridgeState: Equatable {
-    case starting(port: Int)
-    case ready(port: Int)
-    case failed(message: String)
-    case stopped
-}
-
-enum MCPBridgeError: LocalizedError {
-    case invalidRequest
-    case unsupportedMethod(String)
-    case missingParameter(String)
-    case invalidParameter(String)
-    case listenerStartFailed
-
-    var errorDescription: String? {
-        switch self {
-        case .invalidRequest:
-            return "Invalid JSON-RPC request."
-        case .unsupportedMethod(let method):
-            return "Unsupported MCP method: \(method)"
-        case .missingParameter(let name):
-            return "Missing parameter: \(name)"
-        case .invalidParameter(let name):
-            return "Invalid parameter: \(name)"
-        case .listenerStartFailed:
-            return "Failed to start MCP listener."
-        }
-    }
-}
-
-protocol MCPBridgeConnecting: AnyObject {
-    var isRunning: Bool { get }
-    var boundPort: Int { get }
-    func configure(host: String, port: Int)
-    func setRequestHandler(_ handler: @escaping @Sendable (MCPHTTPRequest) async -> Result<JSONValue, Error>)
-    func setStateHandler(_ handler: @escaping @Sendable (MCPBridgeState) -> Void)
-    func start() async throws
-    func stop() async
-}
-
-final class MCPBridgeConnector: MCPBridgeConnecting {
+final class MCPHTTPServer: MCPServerTransporting {
     private final class StartResolution {
         var hasResolved = false
     }
 
     private let queue = DispatchQueue(label: "dev.wads.AssistantMCPServer.mcp", qos: .userInitiated)
     private let encoder = JSONEncoder()
-    private let decoder = JSONDecoder()
 
     private var listener: NWListener?
     private var handler: (@Sendable (MCPHTTPRequest) async -> Result<JSONValue, Error>)?
-    private var stateHandler: (@Sendable (MCPBridgeState) -> Void)?
+    private var stateHandler: (@Sendable (MCPServerState) -> Void)?
     private(set) var isRunning = false
     private(set) var boundPort: Int = 8080
     private var host = "localhost"
@@ -195,7 +25,7 @@ final class MCPBridgeConnector: MCPBridgeConnecting {
         self.handler = handler
     }
 
-    func setStateHandler(_ handler: @escaping @Sendable (MCPBridgeState) -> Void) {
+    func setStateHandler(_ handler: @escaping @Sendable (MCPServerState) -> Void) {
         self.stateHandler = handler
     }
 
@@ -205,11 +35,10 @@ final class MCPBridgeConnector: MCPBridgeConnecting {
         }
 
         guard let port = NWEndpoint.Port(rawValue: UInt16(boundPort)) else {
-            throw MCPBridgeError.invalidParameter("port")
+            throw MCPServerError.invalidParameter("port")
         }
 
-        let parameters = NWParameters.tcp
-        let listener = try NWListener(using: parameters, on: port)
+        let listener = try NWListener(using: .tcp, on: port)
         let stateHandler = self.stateHandler
         listener.newConnectionHandler = { [weak self] connection in
             self?.handle(connection: connection)
@@ -242,7 +71,7 @@ final class MCPBridgeConnector: MCPBridgeConnecting {
                     stateHandler?(.stopped)
                     guard !resolution.hasResolved else { return }
                     resolution.hasResolved = true
-                    continuation.resume(throwing: MCPBridgeError.listenerStartFailed)
+                    continuation.resume(throwing: MCPServerError.listenerStartFailed)
                 default:
                     break
                 }
@@ -291,7 +120,7 @@ final class MCPBridgeConnector: MCPBridgeConnecting {
             }
 
             if isComplete {
-                let payload = self.httpResponse(status: 400, body: self.errorPayload(message: MCPBridgeError.invalidRequest.localizedDescription))
+                let payload = self.httpResponse(status: 400, body: self.errorPayload(message: MCPServerError.invalidRequest.localizedDescription))
                 self.respond(on: connection, payload: payload)
                 return
             }
@@ -338,7 +167,7 @@ final class MCPBridgeConnector: MCPBridgeConnecting {
             let payloadObject = try JSONSerialization.jsonObject(with: body) as? [String: Any],
             let method = payloadObject["method"] as? String
         else {
-            throw MCPBridgeError.invalidRequest
+            throw MCPServerError.invalidRequest
         }
 
         let id = payloadObject["id"].flatMap(JSONValue.from(any:))
