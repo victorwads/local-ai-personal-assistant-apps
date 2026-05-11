@@ -1,6 +1,7 @@
 .DS_Store
 DerivedData/
 build/
+*.xcodeproj/
 *.xcuserdata
 *.xcuserstate
 *.moved-aside
