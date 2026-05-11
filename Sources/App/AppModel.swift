@@ -12,6 +12,8 @@ final class AppModel: ObservableObject {
     @Published private(set) var isPolling = false
     @Published private(set) var lastRefreshDescription = "Never refreshed"
     @Published private(set) var waitingForAccessibilityRelaunch = false
+    @Published var messageDraft = ""
+    @Published private(set) var isSendingMessage = false
 
     private let accessibility = AccessibilityService()
     private let parser = WhatsAppAppParser()
@@ -125,6 +127,42 @@ final class AppModel: ObservableObject {
         appendLog("Stopped WhatsApp polling.")
     }
 
+    func sendMessageToSelectedChat() async {
+        let trimmedMessage = messageDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedMessage.isEmpty else {
+            appendLog("Cannot send an empty message.", level: .warning)
+            return
+        }
+
+        guard let selectedChatState else {
+            appendLog("No selected conversation available to send a message.", level: .warning)
+            return
+        }
+
+        guard prepareForWhatsAppInspection() else {
+            return
+        }
+
+        isSendingMessage = true
+        defer { isSendingMessage = false }
+
+        do {
+            let snapshot = try accessibility.captureWhatsAppSnapshot(maxDepth: 14)
+            try interactor.sendMessage(trimmedMessage, in: snapshot, using: accessibility)
+            messageDraft = ""
+            appendLog("Sent message to \(selectedChatState.chat.name).")
+
+            try await Task.sleep(for: .milliseconds(500))
+
+            let refreshedSnapshot = try accessibility.captureWhatsAppSnapshot(maxDepth: 14)
+            let refreshedState = parser.parse(snapshot: refreshedSnapshot, messageLimit: 10)
+            writeDebugArtifacts(snapshot: refreshedSnapshot, screenState: refreshedState, prefix: "send-\(selectedChatState.chat.id)")
+            updateSelectedChatState(from: refreshedState, preferredConversation: selectedChatState.chat)
+        } catch {
+            appendLog("Failed to send message: \(error.localizedDescription)", level: .error)
+        }
+    }
+
     private func startPermissionMonitor() {
         permissionMonitorTask?.cancel()
         waitingForAccessibilityRelaunch = true
@@ -194,15 +232,7 @@ final class AppModel: ObservableObject {
             let snapshot = try accessibility.captureWhatsAppSnapshot(maxDepth: 14)
             let screenState = parser.parse(snapshot: snapshot, messageLimit: 10)
             writeDebugArtifacts(snapshot: snapshot, screenState: screenState, prefix: "chat-\(conversation.id)")
-            let latestConversation = screenState.conversations.first { $0.id == conversation.id } ?? conversation
-
-            let chatState = ChatState(
-                chat: latestConversation,
-                messages: screenState.messages,
-                composeFocused: screenState.composeFocused,
-                canSendText: screenState.canSendText
-            )
-
+            let chatState = makeChatState(from: screenState, preferredConversation: conversation)
             chatStatesById[conversation.id] = chatState
             if updateSelectedChat {
                 selectedChatState = chatState
@@ -211,6 +241,23 @@ final class AppModel: ObservableObject {
         } catch {
             appendLog("Failed to load messages for \(conversation.name): \(error.localizedDescription)", level: .error)
         }
+    }
+
+    private func updateSelectedChatState(from screenState: WhatsAppScreenState, preferredConversation: ConversationSummary) {
+        let chatState = makeChatState(from: screenState, preferredConversation: preferredConversation)
+        chatStatesById[preferredConversation.id] = chatState
+        selectedChatState = chatState
+    }
+
+    private func makeChatState(from screenState: WhatsAppScreenState, preferredConversation: ConversationSummary) -> ChatState {
+        let latestConversation = screenState.conversations.first { $0.id == preferredConversation.id } ?? preferredConversation
+
+        return ChatState(
+            chat: latestConversation,
+            messages: screenState.messages,
+            composeFocused: screenState.composeFocused,
+            canSendText: screenState.canSendText
+        )
     }
 
     private func prepareForWhatsAppInspection() -> Bool {

@@ -39,7 +39,16 @@ struct ContentView: View {
             VStack(spacing: 0) {
                 toolbar
                 Divider()
-                ChatDetailView(chatState: appModel.selectedChatState)
+                ChatDetailView(
+                    chatState: appModel.selectedChatState,
+                    messageDraft: $appModel.messageDraft,
+                    isSendingMessage: appModel.isSendingMessage,
+                    onSend: {
+                        Task {
+                            await appModel.sendMessageToSelectedChat()
+                        }
+                    }
+                )
                     .frame(maxHeight: .infinity)
                 Divider()
                 LogView(logs: appModel.logs)
@@ -191,6 +200,9 @@ private struct ConversationRow: View {
 
 private struct ChatDetailView: View {
     let chatState: ChatState?
+    @Binding var messageDraft: String
+    let isSendingMessage: Bool
+    let onSend: () -> Void
 
     var body: some View {
         Group {
@@ -206,6 +218,8 @@ private struct ChatDetailView: View {
                         }
                         .padding(14)
                     }
+                    Divider()
+                    composer
                 }
             } else {
                 ContentUnavailableView(
@@ -215,6 +229,23 @@ private struct ChatDetailView: View {
                 )
             }
         }
+    }
+
+    private var composer: some View {
+        HStack(alignment: .bottom, spacing: 12) {
+            TextField("Write a message", text: $messageDraft, axis: .vertical)
+                .textFieldStyle(.roundedBorder)
+                .lineLimit(1...4)
+
+            Button {
+                onSend()
+            } label: {
+                Label(isSendingMessage ? "Sending..." : "Send", systemImage: "paperplane.fill")
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(isSendingMessage || messageDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
+        .padding(14)
     }
 
     private func header(for chatState: ChatState) -> some View {
