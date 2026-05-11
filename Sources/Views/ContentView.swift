@@ -58,8 +58,9 @@ struct ContentView: View {
             Button {
                 appModel.requestAccessibilityPermission()
             } label: {
-                Label("Permission", systemImage: "lock.open")
+                Label(appModel.waitingForAccessibilityRelaunch ? "Waiting Permission" : "Permission", systemImage: appModel.waitingForAccessibilityRelaunch ? "hourglass" : "lock.open")
             }
+            .disabled(appModel.waitingForAccessibilityRelaunch)
 
             Button {
                 appModel.dumpWhatsAppSnapshot()

@@ -306,6 +306,8 @@ xcodebuild -project AssistantMCPServer.xcodeproj -scheme AssistantMCPServer -con
 
 Run from Xcode first so macOS can prompt for Accessibility permission cleanly.
 
+For Accessibility testing, do not run the app unsigned or with `CODE_SIGNING_ALLOWED=NO`. macOS TCC keys the permission to the app identity, and ad-hoc/unsigned rebuilds can make System Settings treat the rebuilt app as a different client. The generated project is configured to use the local `Apple Development` signing identity with team `RP7J7JX9L2`; if this machine changes, update `DEVELOPMENT_TEAM` in `project.yml`, run `xcodegen generate`, then grant Accessibility once again.
+
 ## Accessibility Permission While Running From Xcode
 
 macOS TCC grants Accessibility permission to a specific app identity/path. When the app is launched from Xcode, that binary usually lives inside Xcode DerivedData, not directly inside the repository.
@@ -315,10 +317,11 @@ If the app keeps saying Accessibility is not trusted:
 1. Run the app from Xcode.
 2. Press `Permission`.
 3. Enable the app that appears in `System Settings > Privacy & Security > Accessibility`.
-4. Stop the app in Xcode.
-5. Run it again from Xcode.
-6. Press `Refresh`.
-7. Press `Dump WhatsApp`.
+4. Return to the app; it should relaunch itself after detecting the new permission.
+5. Press `Refresh`.
+6. Press `Dump WhatsApp`.
+
+If the Accessibility toggle turns itself off after every rebuild, remove the old entry from System Settings, confirm the app is being signed with a stable `Apple Development` identity, rebuild, and grant the permission again.
 
 The app logs its current bundle id, bundle path, and executable path so you can verify which exact binary macOS needs to trust.
 

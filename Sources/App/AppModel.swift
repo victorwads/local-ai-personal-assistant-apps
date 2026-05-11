@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 @MainActor
@@ -10,10 +11,12 @@ final class AppModel: ObservableObject {
     @Published private(set) var selectedChatState: ChatState?
     @Published private(set) var isPolling = false
     @Published private(set) var lastRefreshDescription = "Never refreshed"
+    @Published private(set) var waitingForAccessibilityRelaunch = false
 
     private let accessibility = AccessibilityService()
     private let parser = WhatsAppScreenParser()
     private var pollingTask: Task<Void, Never>?
+    private var permissionMonitorTask: Task<Void, Never>?
     private var chatStatesById: [String: ChatState] = [:]
     private var listSignaturesById: [String: String] = [:]
 
@@ -32,10 +35,18 @@ final class AppModel: ObservableObject {
     }
 
     func requestAccessibilityPermission() {
+        if accessibility.isTrusted(prompt: false) {
+            accessibilityTrusted = true
+            appendLog("Accessibility is already trusted for this app identity.")
+            return
+        }
+
         _ = accessibility.isTrusted(prompt: true)
         appendLog("Requested Accessibility permission from macOS.")
-        appendLog("If permission was just enabled, relaunch this app from Xcode and press Refresh.")
+        appendLog("After enabling the app in System Settings, this app will relaunch itself.")
+        appendLog("If permission resets after every build, configure a stable Apple Development signing identity for Debug.", level: .warning)
         refreshStatus()
+        startPermissionMonitor()
     }
 
     func dumpWhatsAppSnapshot() {
@@ -106,6 +117,49 @@ final class AppModel: ObservableObject {
         pollingTask = nil
         isPolling = false
         appendLog("Stopped WhatsApp polling.")
+    }
+
+    private func startPermissionMonitor() {
+        permissionMonitorTask?.cancel()
+        waitingForAccessibilityRelaunch = true
+
+        permissionMonitorTask = Task { [weak self] in
+            guard let self else { return }
+
+            for _ in 0..<120 {
+                guard !Task.isCancelled else { return }
+
+                if self.accessibility.isTrusted(prompt: false) {
+                    self.accessibilityTrusted = true
+                    self.waitingForAccessibilityRelaunch = false
+                    self.appendLog("Accessibility permission is now trusted. Relaunching app.")
+                    self.relaunchCurrentApp()
+                    return
+                }
+
+                try? await Task.sleep(for: .seconds(1))
+            }
+
+            self.waitingForAccessibilityRelaunch = false
+            self.appendLog("Timed out waiting for Accessibility permission. Press Permission again after changing System Settings.", level: .warning)
+        }
+    }
+
+    private func relaunchCurrentApp() {
+        let bundleURL = Bundle.main.bundleURL
+
+        do {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+            process.arguments = ["-n", bundleURL.path]
+            try process.run()
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                NSApp.terminate(nil)
+            }
+        } catch {
+            appendLog("Failed to relaunch app automatically: \(error.localizedDescription)", level: .error)
+        }
     }
 
     private func refreshChangedChats(from conversations: [ConversationSummary]) async {
