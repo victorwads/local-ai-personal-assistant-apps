@@ -6,24 +6,28 @@ actor VoiceAssistant {
     private var audioEngine: AVAudioEngine?
     private var recognitionTask: SFSpeechRecognitionTask?
 
-    func speak(_ text: String, language: String = "pt-BR", rate: Float = AVSpeechUtteranceDefaultSpeechRate) async {
+    func speak(_ text: String, language: String = "pt-BR", voiceIdentifier: String? = nil, rate: Float = AVSpeechUtteranceDefaultSpeechRate) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
         await MainActor.run {
             let utterance = AVSpeechUtterance(string: trimmed)
-            utterance.voice = AVSpeechSynthesisVoice(language: language)
+            if let voiceIdentifier, let voice = AVSpeechSynthesisVoice(identifier: voiceIdentifier) {
+                utterance.voice = voice
+            } else {
+                utterance.voice = AVSpeechSynthesisVoice(language: language)
+            }
             utterance.rate = min(max(rate, AVSpeechUtteranceMinimumSpeechRate), AVSpeechUtteranceMaximumSpeechRate)
             self.synthesizer.speak(utterance)
         }
     }
 
-    func askUser(prompt: String, language: String = "pt-BR", timeoutSeconds: Int = 20) async throws -> String {
-        await speak(prompt, language: language)
-        return try await listen(language: language, timeoutSeconds: timeoutSeconds)
+    func askUser(prompt: String, language: String = "pt-BR", voiceIdentifier: String? = nil, recognitionLocaleIdentifier: String = "pt-BR", timeoutSeconds: Int = 20) async throws -> String {
+        await speak(prompt, language: language, voiceIdentifier: voiceIdentifier)
+        return try await listen(recognitionLocaleIdentifier: recognitionLocaleIdentifier, timeoutSeconds: timeoutSeconds)
     }
 
-    func listen(language: String = "pt-BR", timeoutSeconds: Int = 20) async throws -> String {
+    func listen(recognitionLocaleIdentifier: String = "pt-BR", timeoutSeconds: Int = 20) async throws -> String {
         let timeoutSeconds = max(3, min(timeoutSeconds, 120))
 
         let speechAuthorized = try await ensureSpeechAuthorization()
@@ -38,7 +42,7 @@ actor VoiceAssistant {
 
         return try await withCheckedThrowingContinuation { continuation in
             do {
-                let locale = Locale(identifier: language)
+                let locale = Locale(identifier: recognitionLocaleIdentifier)
                 guard let recognizer = SFSpeechRecognizer(locale: locale) else {
                     throw VoiceAssistantError.speechRecognizerUnavailable
                 }
@@ -164,4 +168,3 @@ enum VoiceAssistantError: LocalizedError {
         }
     }
 }
-

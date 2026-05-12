@@ -1,3 +1,4 @@
+import AVFoundation
 import AppKit
 import Combine
 import Foundation
@@ -26,6 +27,10 @@ final class AppModel: ObservableObject {
     @Published var debugSnapshot: WhatsAppSnapshot?
     @Published var debugNodePath: [Int] = []
     @Published var assistantInstructions = ""
+    @Published var speechVoiceIdentifier: String?
+    @Published var speechLanguage = "pt-BR"
+    @Published var speechRate: Float = AVSpeechUtteranceDefaultSpeechRate
+    @Published var recognitionLocaleIdentifier = "pt-BR"
 
     let accessibility = AccessibilityService()
     let accessibilityScheduler = AccessibilityActionScheduler()
@@ -41,12 +46,17 @@ final class AppModel: ObservableObject {
     var cancellables: Set<AnyCancellable> = []
     let blockedConversationDefaultsKey = "blockedConversationNames"
     let assistantInstructionsDefaultsKey = "assistantInstructions"
+    let speechVoiceIdentifierDefaultsKey = "speechVoiceIdentifier"
+    let speechLanguageDefaultsKey = "speechLanguage"
+    let speechRateDefaultsKey = "speechRate"
+    let recognitionLocaleIdentifierDefaultsKey = "recognitionLocaleIdentifier"
     var mcpRestartTask: Task<Void, Never>?
     var liveStatusTask: Task<Void, Never>?
 
     init() {
         loadBlockedConversationNames()
         loadAssistantInstructions()
+        loadVoiceSettings()
         bindMemoryStore()
         configureMCPConnector()
         refreshStatus()

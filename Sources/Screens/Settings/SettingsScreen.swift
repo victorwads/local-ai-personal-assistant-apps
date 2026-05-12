@@ -1,4 +1,5 @@
 import AppKit
+import AVFoundation
 import SwiftUI
 
 struct SettingsScreen: View {
@@ -136,6 +137,55 @@ struct SettingsScreen: View {
 
                 GroupBox("Assistant") {
                     VStack(alignment: .leading, spacing: 10) {
+                        Text("Voice")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+
+                        HStack {
+                            Text("Recognition")
+                            Spacer()
+                            Picker("Recognition", selection: $appModel.recognitionLocaleIdentifier) {
+                                ForEach(appModel.availableRecognitionLocales, id: \.identifier) { locale in
+                                    Text(locale.identifier).tag(locale.identifier)
+                                }
+                            }
+                            .frame(width: 220, alignment: .trailing)
+                        }
+
+                        HStack {
+                            Text("Speech language")
+                            Spacer()
+                            TextField("pt-BR", text: $appModel.speechLanguage)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 120)
+                        }
+
+                        HStack {
+                            Text("Voice")
+                            Spacer()
+                            Picker("Voice", selection: Binding<String>(
+                                get: { appModel.speechVoiceIdentifier ?? "" },
+                                set: { appModel.speechVoiceIdentifier = $0.isEmpty ? nil : $0 }
+                            )) {
+                                Text("Auto").tag("")
+                                ForEach(appModel.availableSpeechVoices, id: \.identifier) { voice in
+                                    Text("\(voice.language) • \(voice.name)").tag(voice.identifier)
+                                }
+                            }
+                            .frame(width: 360, alignment: .trailing)
+                        }
+
+                        HStack {
+                            Text("Rate")
+                            Spacer()
+                            Slider(value: $appModel.speechRate, in: AVSpeechUtteranceMinimumSpeechRate...AVSpeechUtteranceMaximumSpeechRate)
+                                .frame(width: 220)
+                            Text(String(format: "%.2f", appModel.speechRate))
+                                .font(.caption.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                                .frame(width: 44, alignment: .trailing)
+                        }
+
                         Text("Instructions")
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.secondary)
