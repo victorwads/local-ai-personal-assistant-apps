@@ -15,6 +15,8 @@ struct DebugTreeScreen: View {
     @State private var selectedNodePreviewError: String?
     @State private var isLoadingSelectedNodePreview = false
     @State private var previewTask: Task<Void, Never>?
+    @State private var previewCache: [String: NSImage] = [:]
+    @State private var lastPreviewCacheKey: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -56,6 +58,8 @@ struct DebugTreeScreen: View {
                     isLoadingSelectedNodePreview = false
                     previewTask?.cancel()
                     previewTask = nil
+                    previewCache = [:]
+                    lastPreviewCacheKey = nil
                 }
                 .onChange(of: selectedNodePath) { _, _ in updateSelectedNodePreview(from: snapshot) }
             } else {
@@ -293,6 +297,17 @@ struct DebugTreeScreen: View {
             return
         }
 
+        let cacheKey = "\(snapshot.capturedAt.timeIntervalSinceReferenceDate)|\(nodeIdString(selectedNodePath))"
+        if lastPreviewCacheKey == cacheKey, selectedNodePreviewImage != nil || selectedNodePreviewError != nil {
+            return
+        }
+        lastPreviewCacheKey = cacheKey
+
+        if let cached = previewCache[cacheKey] {
+            selectedNodePreviewImage = cached
+            return
+        }
+
         isLoadingSelectedNodePreview = true
         let padding: CGFloat = 8
         let region = frame.insetBy(dx: -padding, dy: -padding)
@@ -306,10 +321,12 @@ struct DebugTreeScreen: View {
                     selectedNodePreviewError = "Could not capture screen preview for this node."
                     return
                 }
-                selectedNodePreviewImage = NSImage(
+                let image = NSImage(
                     cgImage: cgImage,
                     size: NSSize(width: region.width, height: region.height)
                 )
+                selectedNodePreviewImage = image
+                previewCache[cacheKey] = image
             }
         }
     }
