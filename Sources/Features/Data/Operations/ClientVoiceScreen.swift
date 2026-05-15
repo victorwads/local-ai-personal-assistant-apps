@@ -6,6 +6,7 @@ struct ClientVoiceScreen: View {
     @State private var events: [ClientVoiceEvent] = []
     @State private var errorText: String?
     @State private var isWorking = false
+    @State private var showingClearHistoryConfirmation = false
 
     @State private var pendingAnswerById: [UUID: String] = [:]
 
@@ -66,6 +67,20 @@ struct ClientVoiceScreen: View {
                 Task { await reload() }
             }
             .disabled(isWorking)
+
+            Button("Clear") {
+                showingClearHistoryConfirmation = true
+            }
+            .disabled(isWorking || events.isEmpty)
+            .foregroundStyle(.red)
+        }
+        .alert("Clear client voice history?", isPresented: $showingClearHistoryConfirmation) {
+            Button("Cancel", role: .cancel) {}
+            Button("Clear History", role: .destructive) {
+                Task { await clearHistory() }
+            }
+        } message: {
+            Text("This removes all client voice events from local history.")
         }
     }
 
@@ -204,6 +219,17 @@ struct ClientVoiceScreen: View {
 
     private func reload() async {
         events = await appModel.clientVoiceEventsRepository.list()
+    }
+
+    private func clearHistory() async {
+        errorText = nil
+        isWorking = true
+        defer { isWorking = false }
+
+        pendingAnswerById.removeAll()
+        await appModel.clientVoiceEventsRepository.clearAll()
+        await appModel.refreshPendingClientAskCount()
+        await reload()
     }
 
     private func replay(_ event: ClientVoiceEvent) async {

@@ -19,6 +19,13 @@ actor ClientVoiceEventsRepository {
         loadAll().filter { $0.kind == .ask && $0.askStatus == .pending }.count
     }
 
+    func clearAll() {
+        defaults.removeObject(forKey: storageKey)
+        let waiters = pendingWaitersById
+        pendingWaitersById.removeAll()
+        waiters.values.forEach { $0.resume(throwing: CancellationError()) }
+    }
+
     func appendSpeak(text: String) -> ClientVoiceEvent {
         var events = loadAll()
         let event = ClientVoiceEvent(
