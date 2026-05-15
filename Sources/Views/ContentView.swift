@@ -7,6 +7,7 @@ struct ContentView: View {
 
     enum SidebarScreen: String, CaseIterable, Identifiable {
         case conversations
+        case nicknames
         case integrationLogs
         case integrationDebug
         case serverLogs
@@ -17,6 +18,7 @@ struct ContentView: View {
         var title: String {
             switch self {
             case .conversations: "Conversations"
+            case .nicknames: "Nicknames"
             case .integrationLogs: "Integration Logs"
             case .integrationDebug: "Integration Debug"
             case .serverLogs: "Server Logs"
@@ -27,6 +29,7 @@ struct ContentView: View {
         var systemImage: String {
             switch self {
             case .conversations: "bubble.left.and.bubble.right"
+            case .nicknames: "tag"
             case .integrationLogs: "list.bullet.rectangle"
             case .integrationDebug: "point.3.connected.trianglepath.dotted"
             case .serverLogs: "server.rack"
@@ -40,6 +43,7 @@ struct ContentView: View {
             List(selection: Binding(get: { selectedScreen }, set: { selectedScreen = $0 ?? selectedScreen })) {
                 Section("Data") {
                     sidebarItem(.conversations)
+                    sidebarItem(.nicknames)
                 }
 
                 Section("Integration") {
@@ -73,6 +77,8 @@ struct ContentView: View {
             switch selectedScreen {
             case .conversations:
                 ConversationsScreen()
+            case .nicknames:
+                NicknamesScreen()
             case .settings:
                 SettingsScreen(appModel: appModel)
                     .padding(12)

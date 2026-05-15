@@ -286,6 +286,40 @@ extension AppModel {
                     ]),
                     "required": .array([.string("prompt")])
                 ]
+            ),
+            MCPToolDefinition(
+                name: "list_nicknames",
+                description: "Lists saved nicknames for WhatsApp chats.",
+                inputSchema: [
+                    "type": .string("object"),
+                    "properties": .object([
+                        "chatId": .object(["type": .string("string")])
+                    ])
+                ]
+            ),
+            MCPToolDefinition(
+                name: "save_nickname",
+                description: "Saves a nickname for a WhatsApp chat (dedupes exact matches).",
+                inputSchema: [
+                    "type": .string("object"),
+                    "properties": .object([
+                        "chatId": .object(["type": .string("string")]),
+                        "chatName": .object(["type": .string("string")]),
+                        "nickname": .object(["type": .string("string")])
+                    ]),
+                    "required": .array([.string("chatId"), .string("nickname")])
+                ]
+            ),
+            MCPToolDefinition(
+                name: "delete_nickname",
+                description: "Deletes a saved nickname by id.",
+                inputSchema: [
+                    "type": .string("object"),
+                    "properties": .object([
+                        "id": .object(["type": .string("string")])
+                    ]),
+                    "required": .array([.string("id")])
+                ]
             )
         ]
     }
@@ -385,6 +419,47 @@ extension AppModel {
             return .success(.object(["timedOut": .bool(true)]))
         case "get_instructions":
             return .success(.object(["instructions": .string(assistantInstructions)]))
+        case "list_nicknames":
+            let chatId = call.arguments["chatId"]?.stringValue ?? call.arguments["chat_id"]?.stringValue
+            let entries = await nicknamesRepository.list(chatId: chatId)
+            return .success(.object([
+                "nicknames": .array(entries.map(nicknameEntryJSONValue))
+            ]))
+        case "save_nickname":
+            let chatId = call.arguments["chatId"]?.stringValue ?? call.arguments["chat_id"]?.stringValue
+            let nickname = call.arguments["nickname"]?.stringValue
+            let providedChatName = call.arguments["chatName"]?.stringValue ?? call.arguments["chat_name"]?.stringValue
+            let resolvedChatName = providedChatName ?? memoryStore.conversation(for: chatId ?? "")?.name
+
+            do {
+                let result = try await nicknamesRepository.save(
+                    chatId: chatId,
+                    chatName: resolvedChatName,
+                    nickname: nickname
+                )
+                return .success(.object([
+                    "ok": .bool(true),
+                    "created": .bool(result.created),
+                    "entry": nicknameEntryJSONValue(result.entry)
+                ]))
+            } catch {
+                return .failure(error)
+            }
+        case "delete_nickname":
+            let rawId = call.arguments["id"]?.stringValue
+            guard let rawId, let id = UUID(uuidString: rawId) else {
+                return .failure(NicknamesRepositoryError.invalidParameter("Invalid id"))
+            }
+
+            do {
+                let deleted = try await nicknamesRepository.delete(id: id)
+                return .success(.object([
+                    "ok": .bool(true),
+                    "deleted": .bool(deleted)
+                ]))
+            } catch {
+                return .failure(error)
+            }
         case "speak":
             guard let text = call.arguments["text"]?.stringValue else {
                 return .failure(MCPServerError.missingParameter("text"))
@@ -438,6 +513,16 @@ extension AppModel {
         default:
             return .failure(MCPServerError.invalidParameter("name"))
         }
+    }
+
+    private func nicknameEntryJSONValue(_ entry: NicknameEntry) -> JSONValue {
+        .object([
+            "id": .string(entry.id.uuidString),
+            "chatId": .string(entry.chatId),
+            "chatName": .string(entry.chatName),
+            "nickname": .string(entry.nickname),
+            "createdAt": .from(date: entry.createdAt)
+        ])
     }
 
     private func conversationJSONValue(_ conversation: ConversationSummary) -> JSONValue {

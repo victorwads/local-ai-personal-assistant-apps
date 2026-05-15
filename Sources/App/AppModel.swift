@@ -68,6 +68,7 @@ final class AppModel: ObservableObject {
     var mcpRestartTask: Task<Void, Never>?
     var liveStatusTask: Task<Void, Never>?
     let serverCallStore = ServerCallStore()
+    let nicknamesRepository = NicknamesRepository()
 
     init() {
         loadConversationAccessSettings()
