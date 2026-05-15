@@ -7,6 +7,7 @@ import MCP
 @MainActor
 final class AppModel: ObservableObject {
     @Published var logs: [LogEntry] = []
+    @Published var serverCalls: [MCPServerCallEntry] = []
     @Published var accessibilityTrusted = false
     @Published var whatsappRunning = false
     @Published var runtimeDescription = ""
@@ -56,6 +57,7 @@ final class AppModel: ObservableObject {
     let chatListSignaturesDefaultsKey = "chatListSignatures.v1"
     var mcpRestartTask: Task<Void, Never>?
     var liveStatusTask: Task<Void, Never>?
+    let serverCallStore = ServerCallStore()
 
     init() {
         loadBlockedConversationNames()
@@ -64,6 +66,9 @@ final class AppModel: ObservableObject {
         loadChatListSignatures()
         bindMemoryStore()
         configureMCPConnector()
+        Task { [weak self] in
+            await self?.loadPersistedServerCalls()
+        }
         refreshStatus()
         startLiveStatusMonitoring()
         Task {

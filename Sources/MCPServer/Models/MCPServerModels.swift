@@ -32,6 +32,45 @@ struct IncomingHTTPRequest {
     let body: Data
 }
 
+struct MCPServerCallEntry: Identifiable, Sendable, Codable, Hashable {
+    let id: UUID
+    let timestamp: Date
+    let durationMilliseconds: Int
+
+    let requestMethod: String
+    let requestPath: String
+    let requestHeaders: [String: String]
+    let requestBody: Data
+
+    let responseStatusCode: Int
+    let responseHeaders: [String: String]
+    let responseBody: Data
+
+    init(
+        id: UUID = UUID(),
+        timestamp: Date = Date(),
+        durationMilliseconds: Int,
+        requestMethod: String,
+        requestPath: String,
+        requestHeaders: [String: String],
+        requestBody: Data,
+        responseStatusCode: Int,
+        responseHeaders: [String: String],
+        responseBody: Data
+    ) {
+        self.id = id
+        self.timestamp = timestamp
+        self.durationMilliseconds = durationMilliseconds
+        self.requestMethod = requestMethod
+        self.requestPath = requestPath
+        self.requestHeaders = requestHeaders
+        self.requestBody = requestBody
+        self.responseStatusCode = responseStatusCode
+        self.responseHeaders = responseHeaders
+        self.responseBody = responseBody
+    }
+}
+
 enum MCPServerState: Equatable {
     case starting(port: Int)
     case ready(port: Int)

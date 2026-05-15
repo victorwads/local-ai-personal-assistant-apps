@@ -2,43 +2,61 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject private var appModel: AppModel
-    @State private var selectedScreen: SidebarScreen? = .conversations
+    @State private var selectedScreen: SidebarScreen = .conversations
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
     enum SidebarScreen: String, CaseIterable, Identifiable {
         case conversations
+        case integrationLogs
+        case integrationDebug
+        case serverLogs
         case settings
-        case logs
-        case debug
 
         var id: String { rawValue }
 
         var title: String {
             switch self {
             case .conversations: "Conversations"
+            case .integrationLogs: "Integration Logs"
+            case .integrationDebug: "Integration Debug"
+            case .serverLogs: "Server Logs"
             case .settings: "Settings"
-            case .logs: "Logs"
-            case .debug: "Debug"
             }
         }
 
         var systemImage: String {
             switch self {
             case .conversations: "bubble.left.and.bubble.right"
+            case .integrationLogs: "list.bullet.rectangle"
+            case .integrationDebug: "point.3.connected.trianglepath.dotted"
+            case .serverLogs: "server.rack"
             case .settings: "gearshape"
-            case .logs: "list.bullet.rectangle"
-            case .debug: "point.3.connected.trianglepath.dotted"
             }
         }
     }
 
     var body: some View {
-        NavigationSplitView {
-            List(selection: $selectedScreen) {
-                ForEach(SidebarScreen.allCases) { screen in
-                    Label(screen.title, systemImage: screen.systemImage)
-                        .tag(screen)
+        NavigationSplitView(columnVisibility: $columnVisibility) {
+            List(selection: Binding(get: { selectedScreen }, set: { selectedScreen = $0 ?? selectedScreen })) {
+                Section("Data") {
+                    sidebarItem(.conversations)
+                }
+
+                Section("Integration") {
+                    sidebarItem(.integrationLogs)
+                    sidebarItem(.integrationDebug)
+                }
+
+                Section("Server") {
+                    sidebarItem(.serverLogs)
+                }
+
+                Section("Settings") {
+                    sidebarItem(.settings)
                 }
             }
+            .listStyle(.sidebar)
+            .navigationSplitViewColumnWidth(min: 220, ideal: 240, max: 360)
             .navigationTitle("Assistant MCP")
         } detail: {
             VStack(spacing: 0) {
@@ -52,18 +70,25 @@ struct ContentView: View {
 
     private var selectedDetailView: some View {
         Group {
-            switch selectedScreen ?? .conversations {
+            switch selectedScreen {
             case .conversations:
                 ConversationsScreen()
             case .settings:
                 SettingsScreen(appModel: appModel)
                     .padding(12)
-            case .logs:
+            case .integrationLogs:
                 LogsScreen()
-            case .debug:
+            case .integrationDebug:
                 DebugTreeScreen()
+            case .serverLogs:
+                ServerLogsScreen()
             }
         }
+    }
+
+    private func sidebarItem(_ screen: SidebarScreen) -> some View {
+        Label(screen.title, systemImage: screen.systemImage)
+            .tag(screen)
     }
 
     private var headerBar: some View {

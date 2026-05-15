@@ -11,6 +11,7 @@ final class MCPHTTPServer: MCPHTTPServerHosting, @unchecked Sendable {
 
     private var listener: NWListener?
     private var stateHandler: (@Sendable (MCPServerState) -> Void)?
+    private var callHandler: (@Sendable (MCPServerCallEntry) -> Void)?
     private(set) var isRunning = false
     private(set) var boundPort: Int = 8080
     private var host = "localhost"
@@ -23,6 +24,10 @@ final class MCPHTTPServer: MCPHTTPServerHosting, @unchecked Sendable {
 
     func setStateHandler(_ handler: @escaping @Sendable (MCPServerState) -> Void) {
         self.stateHandler = handler
+    }
+
+    func setCallHandler(_ handler: @escaping @Sendable (MCPServerCallEntry) -> Void) {
+        self.callHandler = handler
     }
 
     func setTransport(_ transport: StatelessHTTPServerTransport) {
@@ -142,8 +147,26 @@ final class MCPHTTPServer: MCPHTTPServerHosting, @unchecked Sendable {
     }
 
     private func process(request: IncomingHTTPRequest) async -> Data {
+        let startedAt = DispatchTime.now()
+
+        let statusCode: Int
+        let headers: [String: String]
+        let body: Data
+        let contentType: String?
+
         guard let transport else {
-            return httpResponse(status: 503, body: Data("MCP transport not configured.\n".utf8), contentType: "text/plain; charset=utf-8")
+            statusCode = 503
+            headers = [:]
+            body = Data("MCP transport not configured.\n".utf8)
+            contentType = "text/plain; charset=utf-8"
+            return finalizeAndLog(
+                request: request,
+                startedAt: startedAt,
+                statusCode: statusCode,
+                headers: headers,
+                body: body,
+                contentType: contentType
+            )
         }
 
         if request.method == "GET", request.path == "/health" {
@@ -153,18 +176,34 @@ final class MCPHTTPServer: MCPHTTPServerHosting, @unchecked Sendable {
                 "transport": "MCP Swift SDK (Stateless HTTP)",
                 "endpoint": "http://\(host):\(boundPort)/mcp"
             ] as [String: Any]
-            let data = (try? JSONSerialization.data(withJSONObject: payload)) ?? Data()
-            return httpResponse(status: 200, body: data)
+            statusCode = 200
+            headers = [:]
+            body = (try? JSONSerialization.data(withJSONObject: payload)) ?? Data()
+            contentType = nil
+            return finalizeAndLog(
+                request: request,
+                startedAt: startedAt,
+                statusCode: statusCode,
+                headers: headers,
+                body: body,
+                contentType: contentType
+            )
         }
 
         if request.method == "GET", request.path == "/mcp" {
             let acceptHeader = request.headers["accept"]?.lowercased() ?? ""
             if !acceptHeader.contains("text/event-stream") {
-                return httpResponse(
-                    status: 405,
-                    headers: ["allow": "POST"],
-                    body: Data("Method Not Allowed.\n".utf8),
-                    contentType: "text/plain; charset=utf-8"
+                statusCode = 405
+                headers = ["allow": "POST"]
+                body = Data("Method Not Allowed.\n".utf8)
+                contentType = "text/plain; charset=utf-8"
+                return finalizeAndLog(
+                    request: request,
+                    startedAt: startedAt,
+                    statusCode: statusCode,
+                    headers: headers,
+                    body: body,
+                    contentType: contentType
                 )
             }
         }
@@ -187,7 +226,52 @@ final class MCPHTTPServer: MCPHTTPServerHosting, @unchecked Sendable {
         )
 
         let response = await transport.handleRequest(httpRequest)
-        return httpResponse(status: response.statusCode, headers: response.headers, body: response.bodyData ?? Data())
+        statusCode = response.statusCode
+        headers = response.headers
+        body = response.bodyData ?? Data()
+        contentType = nil
+
+        return finalizeAndLog(
+            request: request,
+            startedAt: startedAt,
+            statusCode: statusCode,
+            headers: headers,
+            body: body,
+            contentType: contentType
+        )
+    }
+
+    private func finalizeAndLog(
+        request: IncomingHTTPRequest,
+        startedAt: DispatchTime,
+        statusCode: Int,
+        headers: [String: String],
+        body: Data,
+        contentType: String?
+    ) -> Data {
+        let elapsedNanoseconds = DispatchTime.now().uptimeNanoseconds - startedAt.uptimeNanoseconds
+        let durationMilliseconds = Int(elapsedNanoseconds / 1_000_000)
+
+        callHandler?(
+            MCPServerCallEntry(
+                durationMilliseconds: durationMilliseconds,
+                requestMethod: request.method,
+                requestPath: request.path,
+                requestHeaders: request.headers,
+                requestBody: capBody(request.body),
+                responseStatusCode: statusCode,
+                responseHeaders: headers,
+                responseBody: capBody(body)
+            )
+        )
+
+        return httpResponse(status: statusCode, headers: headers, body: body, contentType: contentType)
+    }
+
+    private func capBody(_ data: Data) -> Data {
+        let limitBytes = 256 * 1024
+        guard data.count > limitBytes else { return data }
+        return data.prefix(limitBytes)
     }
 
     private func parseHTTPRequest(from data: Data) -> IncomingHTTPRequest? {

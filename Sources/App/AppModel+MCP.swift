@@ -81,6 +81,12 @@ extension AppModel {
                 self?.handleMCPStateChange(state)
             }
         }
+
+        mcpConnector.setCallHandler { [weak self] entry in
+            Task { @MainActor [weak self] in
+                self?.appendServerCall(entry)
+            }
+        }
     }
 
     private func handleMCPStateChange(_ state: MCPServerState) {
