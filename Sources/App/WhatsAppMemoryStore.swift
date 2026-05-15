@@ -105,8 +105,9 @@ final class WhatsAppMemoryStore: ObservableObject {
         conversations.first(where: { $0.id == id })
     }
 
-    // 12 Hours Timeout
-    func waitForNextMessage(chatId: String?, afterMessageId: String?, timeoutSeconds: Int = 43200) async -> WaitForMessageResult? {
+    /// Wait indefinitely (no timeout) until a new message arrives.
+    /// If you need a timeout, implement it at the caller level.
+    func waitForNextMessage(chatId: String?, afterMessageId: String?, timeoutSeconds: Int? = nil) async -> WaitForMessageResult? {
         if let immediateMatch = latestMessageResult(chatId: chatId, afterMessageId: afterMessageId) {
             return immediateMatch
         }
@@ -151,9 +152,11 @@ final class WhatsAppMemoryStore: ObservableObject {
                 waiter.finish(WaitForMessageResult(chat: chatState.chat, message: latestMessage), remove: self.removeEventListener)
             }
 
-            Task { @MainActor in
-                try? await Task.sleep(for: .seconds(timeoutSeconds))
-                waiter.finish(nil, remove: self.removeEventListener)
+            if let timeoutSeconds {
+                Task { @MainActor in
+                    try? await Task.sleep(for: .seconds(timeoutSeconds))
+                    waiter.finish(nil, remove: self.removeEventListener)
+                }
             }
         }
     }

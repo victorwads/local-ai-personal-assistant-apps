@@ -246,8 +246,7 @@ extension AppModel {
                     "type": .string("object"),
                     "properties": .object([
                         "chatId": .object(["type": .string("string")]),
-                        "afterMessageId": .object(["type": .string("string")]),
-                        "timeoutSeconds": .object(["type": .string("number")])
+                        "afterMessageId": .object(["type": .string("string")])
                     ])
                 ]
             ),
@@ -366,10 +365,10 @@ extension AppModel {
                 return .failure(error)
             }
         case "wait_for_message":
-//            let timeoutSeconds = max(1, call.arguments["timeoutSeconds"]?.intValue ?? 60)
             let result = await memoryStore.waitForNextMessage(
                 chatId: call.arguments["chatId"]?.stringValue ?? call.arguments["chat_id"]?.stringValue,
                 afterMessageId: call.arguments["afterMessageId"]?.stringValue,
+                timeoutSeconds: nil
             )
 
             if let result {
