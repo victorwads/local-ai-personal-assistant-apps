@@ -296,6 +296,33 @@ struct SettingsScreen: View {
                             .toggleStyle(.switch)
                             .help("When enabled (default), opening a pending client ask will bring a floating window to the front and start voice recognition with auto-submit.")
 
+                        HStack(spacing: 10) {
+                            Button {
+                                Task {
+                                    await appModel.requestMicrophonePermission()
+                                }
+                            } label: {
+                                Label("Request Microphone Permission", systemImage: "mic")
+                            }
+
+                            Button {
+                                Task {
+                                    do {
+                                        _ = try await appModel.voiceAssistant.listen(
+                                            recognitionLocaleIdentifier: appModel.recognitionLocaleIdentifier,
+                                            timeoutSeconds: 5
+                                        )
+                                    } catch {
+                                        // Intentionally ignore: this is only to trigger the system prompt / validate access.
+                                    }
+                                    appModel.refreshMicrophoneAuthorization()
+                                }
+                            } label: {
+                                Label("Test Mic Prompt", systemImage: "waveform")
+                            }
+                            .help("Starts a short 5s listen to force macOS to show Microphone/Speech permission prompts (if needed).")
+                        }
+
                         Button {
                             let text = appModel.assistantInstructions.trimmingCharacters(in: .whitespacesAndNewlines)
                             guard !text.isEmpty else { return }
