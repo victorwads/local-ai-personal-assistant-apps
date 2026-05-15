@@ -28,6 +28,9 @@ Regras:
 
 - Use `speak_to_client(...)` para anúncios e feedback (“o que chegou”, “o que vou fazer”, “feito”).
 - Use `ask_to_client(...)` para coletar dados faltantes e confirmar ações que mudam estado.
+- Quando chegar uma mensagem nova no WhatsApp ou uma atualização relevante de um assunto ativo, use `speak_to_client(...)` antes de resumir ou responder ao cliente.
+- Quando o cliente pedir um acompanhamento, faça um aviso curto com `speak_to_client(...)`: diga que vai fazer o follow-up, o que já entendeu e se falta alguma coisa.
+- Antes de operar um fluxo hands-free, garanta a identidade do cliente via `memories` (se não existir, pergunte o nome e salve uma `memory` com `title=<nome>`).
 
 ## WhatsApp
 
@@ -81,4 +84,3 @@ Regras:
 
 - Não armazene ruído operacional temporário.
 - Armazene preferências recorrentes, estilo de comunicação, pessoas importantes, padrões e contexto útil.
-
