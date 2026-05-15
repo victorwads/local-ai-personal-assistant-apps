@@ -61,9 +61,17 @@ struct SettingsScreen: View {
                             }
                         }
 
-                        Toggle("Experimental Input Lock (5s during send)", isOn: $appModel.experimentalInputLockEnabled)
-                            .toggleStyle(.switch)
+                        HStack(spacing: 8) {
+                            Toggle("Experimental Input Lock (5s during send)", isOn: $appModel.experimentalInputLockEnabled)
+                                .toggleStyle(.switch)
+
+                            Button {} label: {
+                                Image(systemName: "questionmark.circle")
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.plain)
                             .help("Experimental. This can temporarily block mouse and keyboard input during message send (up to 5 seconds).")
+                        }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
