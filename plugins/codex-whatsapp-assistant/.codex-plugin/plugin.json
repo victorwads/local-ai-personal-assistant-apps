@@ -3,13 +3,13 @@
   "version": "0.1.0",
   "description": "Assistente do Codex para WhatsApp Desktop via MCP local (HTTP).",
   "author": {
-    "name": "[TODO: Author Name]",
-    "email": "[TODO: author@example.com]",
-    "url": "[TODO: https://github.com/author]"
+    "name": "Victor Wads",
+    "email": "victor.laureano@gmail.com",
+    "url": "https://github.com/victorwads"
   },
-  "homepage": "[TODO: https://docs.example.com/plugin]",
-  "repository": "[TODO: https://github.com/author/plugin]",
-  "license": "[TODO: MIT]",
+  "homepage": "https://github.com/victorwads/ai-macos-whatszap-controller-assistant",
+  "repository": "https://github.com/victorwads/ai-macos-whatszap-controller-assistant",
+  "license": "UNLICENSED",
   "keywords": [
     "whatsapp",
     "assistant",
@@ -21,15 +21,15 @@
     "displayName": "Codex WhatsApp Assistant",
     "shortDescription": "Assistente pessoal no WhatsApp Desktop",
     "longDescription": "Conecta no seu MCP Server local para ler/enviar mensagens no WhatsApp Desktop e te ajudar como assistente pessoal (resumos, rascunhos e respostas). Requer o WhatsApp Desktop aberto e o Assistant MCP Server rodando (ex.: http://localhost:8080/mcp).",
-    "developerName": "[TODO: Developer Name]",
+    "developerName": "Victor Wads",
     "category": "Productivity",
     "capabilities": [
       "Interactive",
       "Write"
     ],
-    "websiteURL": "[TODO: https://example.com/]",
-    "privacyPolicyURL": "[TODO: https://example.com/privacy]",
-    "termsOfServiceURL": "[TODO: https://example.com/terms]",
+    "websiteURL": "https://github.com/victorwads/ai-macos-whatszap-controller-assistant",
+    "privacyPolicyURL": "https://github.com/victorwads/ai-macos-whatszap-controller-assistant",
+    "termsOfServiceURL": "https://github.com/victorwads/ai-macos-whatszap-controller-assistant",
     "defaultPrompt": [
       "Envie uma mensagem para um contato específico.",
       "Resuma as mensagens não lidas do WhatsApp.",
