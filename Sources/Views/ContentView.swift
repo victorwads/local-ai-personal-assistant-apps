@@ -2,14 +2,14 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject private var appModel: AppModel
-    @State private var selectedScreen: SidebarScreen = .conversations
+    @State private var selectedScreen: SidebarScreen = .whatsAppChats
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
     enum SidebarScreen: String, CaseIterable, Identifiable {
-        case conversations
         case nicknames
         case subjects
         case memories
+        case whatsAppChats
         case integrationLogs
         case integrationDebug
         case serverLogs
@@ -19,10 +19,10 @@ struct ContentView: View {
 
         var title: String {
             switch self {
-            case .conversations: "Conversations"
             case .nicknames: "Nicknames"
             case .subjects: "Subjects"
             case .memories: "Memories"
+            case .whatsAppChats: "WhatsApp"
             case .integrationLogs: "Logs"
             case .integrationDebug: "Debug"
             case .serverLogs: "Server Logs"
@@ -32,10 +32,10 @@ struct ContentView: View {
 
         var systemImage: String {
             switch self {
-            case .conversations: "bubble.left.and.bubble.right"
             case .nicknames: "tag"
             case .subjects: "checklist"
             case .memories: "brain"
+            case .whatsAppChats: "bubble.left.and.bubble.right"
             case .integrationLogs: "list.bullet.rectangle"
             case .integrationDebug: "point.3.connected.trianglepath.dotted"
             case .serverLogs: "server.rack"
@@ -48,13 +48,13 @@ struct ContentView: View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             List(selection: Binding(get: { selectedScreen }, set: { selectedScreen = $0 ?? selectedScreen })) {
                 Section("Data") {
-                    sidebarItem(.conversations)
                     sidebarItem(.nicknames)
                     sidebarItem(.subjects)
                     sidebarItem(.memories)
                 }
 
-                Section("Integration") {
+                Section("WhatsApp Integration") {
+                    sidebarItem(.whatsAppChats)
                     sidebarItem(.integrationLogs)
                     sidebarItem(.integrationDebug)
                 }
@@ -83,14 +83,14 @@ struct ContentView: View {
     private var selectedDetailView: some View {
         Group {
             switch selectedScreen {
-            case .conversations:
-                ConversationsScreen()
             case .nicknames:
                 NicknamesScreen()
             case .subjects:
                 SubjectsScreen()
             case .memories:
                 MemoriesScreen()
+            case .whatsAppChats:
+                ConversationsScreen()
             case .settings:
                 SettingsScreen(appModel: appModel)
                     .padding(12)
