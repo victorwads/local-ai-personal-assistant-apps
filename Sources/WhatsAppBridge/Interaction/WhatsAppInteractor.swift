@@ -17,6 +17,14 @@ struct WhatsAppInteractor {
         }
 
         try accessibility.sendText(text, to: composePath)
+        // Re-activate WhatsApp right before Enter. Without this, the user can steal focus mid-flight
+        // and the Enter key event goes to the wrong app.
+        try accessibility.ensureWhatsAppActive()
+        // WhatsApp can require an actual "press" interaction (not only AXFocused=true) for Enter-to-send.
+        // Use AXPress only (no coordinate click) to avoid hitting message rows.
+        try? accessibility.pressNodeAXOnly(at: composePath)
+        try? accessibility.focusNode(at: composePath)
+        Thread.sleep(forTimeInterval: 0.05)
         do {
             try accessibility.pressEnterKey()
         } catch {

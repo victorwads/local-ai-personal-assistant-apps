@@ -3,6 +3,12 @@ import AppKit
 import CoreGraphics
 
 final class AccessibilityService {
+    /// Best-effort: bring WhatsApp to the foreground so subsequent CGEvent key injections
+    /// are delivered to WhatsApp (not whatever app the user is currently typing in).
+    func ensureWhatsAppActive() throws {
+        try activateWhatsApp()
+    }
+
     func isTrusted(prompt: Bool) -> Bool {
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: prompt] as CFDictionary
         return AXIsProcessTrustedWithOptions(options)
@@ -68,6 +74,23 @@ final class AccessibilityService {
         throw AccessibilityError.actionFailed(-1)
     }
 
+    /// Tries to press a node using AXPress only (no coordinate clicking fallback).
+    /// This is safer for text areas, where a coordinate click can hit an unrelated element.
+    func pressNodeAXOnly(at path: [Int]) throws {
+        guard let app = findWhatsAppApplication() else {
+            throw AccessibilityError.whatsAppNotRunning
+        }
+
+        let root = AXUIElementCreateApplication(app.processIdentifier)
+        guard let element = element(at: path, from: root) else {
+            throw AccessibilityError.nodeNotFound
+        }
+
+        guard AXUIElementPerformAction(element, kAXPressAction as CFString) == .success else {
+            throw AccessibilityError.actionFailed(-1)
+        }
+    }
+
     func setValue(_ newValue: String, at path: [Int]) throws {
         guard let app = findWhatsAppApplication() else {
             throw AccessibilityError.whatsAppNotRunning
@@ -101,6 +124,7 @@ final class AccessibilityService {
     }
 
     func pressEnterKey() throws {
+        try activateWhatsApp()
         guard let source = CGEventSource(stateID: .combinedSessionState) else {
             throw AccessibilityError.actionFailed(-1)
         }
@@ -117,8 +141,25 @@ final class AccessibilityService {
 
     func sendText(_ text: String, to path: [Int]) throws {
         try activateWhatsApp()
+        // Make sure the caret is really in the compose field. AXFocused alone isn't always enough.
+        try? pressNodeAXOnly(at: path)
         try focusNode(at: path)
-        try setValue(text, at: path)
+        Thread.sleep(forTimeInterval: 0.05)
+        // Do not use AXValue here. WhatsApp often won't fire input/change events when the value is set
+        // programmatically, which can prevent the Send button from appearing and Enter from sending.
+        // Prefer "real" input via keyboard events (or pasteboard) to trigger the app's event pipeline.
+        do {
+            try clearFocusedTextField()
+        } catch {
+            // If we can't reliably clear, continue anyway; typing/paste will still usually work.
+        }
+
+        do {
+            try typeTextViaUnicodeEvents(text)
+        } catch {
+            // Fallback: paste via clipboard (Cmd+V). This also tends to trigger input events.
+            try pasteTextViaClipboard(text)
+        }
     }
 
     private func activateWhatsApp() throws {
@@ -127,9 +168,73 @@ final class AccessibilityService {
         }
 
         if !app.isActive {
-            app.activate(options: [.activateAllWindows])
+            app.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
             Thread.sleep(forTimeInterval: 0.15)
         }
+    }
+
+    private func clearFocusedTextField() throws {
+        // Cmd+A then Delete is the most robust "clear" across editable fields.
+        try pressKey(keyCode: 0, flags: .maskCommand) // 'A'
+        try pressKey(keyCode: 51, flags: []) // Delete/Backspace
+        Thread.sleep(forTimeInterval: 0.05)
+    }
+
+    private func pasteTextViaClipboard(_ text: String) throws {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+        Thread.sleep(forTimeInterval: 0.02)
+
+        // Cmd+V
+        try pressKey(keyCode: 9, flags: .maskCommand) // 'V'
+        Thread.sleep(forTimeInterval: 0.05)
+    }
+
+    private func typeTextViaUnicodeEvents(_ text: String) throws {
+        guard let source = CGEventSource(stateID: .combinedSessionState) else {
+            throw AccessibilityError.actionFailed(-1)
+        }
+
+        // Send as small unicode chunks to behave like "real typing" and trigger input events.
+        // (CGEvent keyboard events have a max unicode payload; keep it modest.)
+        let scalars = Array(text.unicodeScalars)
+        var idx = 0
+        while idx < scalars.count {
+            let end = min(idx + 20, scalars.count)
+            let chunk = String(String.UnicodeScalarView(scalars[idx..<end]))
+            idx = end
+
+            guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true),
+                  let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false)
+            else {
+                throw AccessibilityError.actionFailed(-1)
+            }
+
+            keyDown.keyboardSetUnicodeString(stringLength: chunk.utf16.count, unicodeString: Array(chunk.utf16))
+            keyUp.keyboardSetUnicodeString(stringLength: chunk.utf16.count, unicodeString: Array(chunk.utf16))
+
+            keyDown.post(tap: .cghidEventTap)
+            keyUp.post(tap: .cghidEventTap)
+            Thread.sleep(forTimeInterval: 0.02)
+        }
+    }
+
+    private func pressKey(keyCode: CGKeyCode, flags: CGEventFlags) throws {
+        guard let source = CGEventSource(stateID: .combinedSessionState) else {
+            throw AccessibilityError.actionFailed(-1)
+        }
+
+        guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true),
+              let keyUp = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: false)
+        else {
+            throw AccessibilityError.actionFailed(-1)
+        }
+
+        keyDown.flags = flags
+        keyUp.flags = flags
+        keyDown.post(tap: .cghidEventTap)
+        keyUp.post(tap: .cghidEventTap)
     }
 
     private func captureNode(from element: AXUIElement, path: [Int], depth: Int, maxDepth: Int) -> RawAXNode {

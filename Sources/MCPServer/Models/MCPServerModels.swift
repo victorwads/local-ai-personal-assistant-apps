@@ -83,6 +83,7 @@ enum MCPServerError: LocalizedError {
     case unsupportedMethod(String)
     case missingParameter(String)
     case invalidParameter(String)
+    case sendNotConfirmed(String)
     case listenerStartFailed
 
     var errorDescription: String? {
@@ -95,6 +96,8 @@ enum MCPServerError: LocalizedError {
             return "Missing parameter: \(name)"
         case .invalidParameter(let name):
             return "Invalid parameter: \(name)"
+        case .sendNotConfirmed(let details):
+            return "Message send not confirmed. \(details)"
         case .listenerStartFailed:
             return "Failed to start MCP listener."
         }
