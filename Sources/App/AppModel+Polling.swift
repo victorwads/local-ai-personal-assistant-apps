@@ -69,10 +69,19 @@ extension AppModel {
     }
 
     private func refreshChangedChats(from conversations: [ConversationSummary]) async {
+        var didUpdateSignatures = false
         for conversation in conversations {
+            guard !isBlocked(conversation.name) else {
+                continue
+            }
             let previousSignature = listSignaturesById[conversation.id]
-            let needsMessages = memoryStore.chatState(for: conversation.id) == nil || previousSignature != conversation.listSignature
-            listSignaturesById[conversation.id] = conversation.listSignature
+            let signatureChanged = previousSignature != conversation.listSignature
+            if previousSignature == nil || signatureChanged {
+                listSignaturesById[conversation.id] = conversation.listSignature
+                didUpdateSignatures = true
+            }
+
+            let needsMessages = previousSignature == nil || signatureChanged
 
             guard needsMessages else {
                 continue
@@ -84,9 +93,17 @@ extension AppModel {
                 updateSelectedChat: selectedChatState?.chat.id == conversation.id
             )
         }
+
+        if didUpdateSignatures {
+            persistChatListSignatures()
+        }
     }
 
-    private func loadMessages(for conversation: ConversationSummary, reason: String, updateSelectedChat: Bool) async {
+    func loadMessages(for conversation: ConversationSummary, reason: String, updateSelectedChat: Bool) async {
+        guard !isBlocked(conversation.name) else {
+            appendLog("Skipped loading messages for blocked conversation \(conversation.name) (\(reason)).", level: .warning)
+            return
+        }
         do {
             let snapshot = try await openConversationAndCapture(conversation)
             let screenState = parser.parse(snapshot: snapshot, messageLimit: 10)
@@ -97,6 +114,20 @@ extension AppModel {
         } catch {
             appendLog("Failed to load messages for \(conversation.name): \(error.localizedDescription)", level: .error)
         }
+    }
+
+    func ensureChatLoaded(chatId: String, reason: String) async {
+        guard memoryStore.chatState(for: chatId) == nil else {
+            return
+        }
+        guard let conversation = memoryStore.conversation(for: chatId) else {
+            return
+        }
+        guard !isBlocked(conversation.name) else {
+            appendLog("Skipped loading blocked conversation \(conversation.name) (\(reason)).", level: .warning)
+            return
+        }
+        await loadMessages(for: conversation, reason: reason, updateSelectedChat: false)
     }
 
     func openConversationAndCapture(_ targetConversation: ConversationSummary) async throws -> WhatsAppSnapshot {

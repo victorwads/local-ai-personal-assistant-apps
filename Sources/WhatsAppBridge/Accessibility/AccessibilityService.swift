@@ -1,8 +1,24 @@
 import AppKit
-import ApplicationServices
+@preconcurrency import ApplicationServices
 import CoreGraphics
 
 final class AccessibilityService {
+    private let inputLock = InputLockService()
+
+    /// Best-effort: bring WhatsApp to the foreground so subsequent CGEvent key injections
+    /// are delivered to WhatsApp (not whatever app the user is currently typing in).
+    func ensureWhatsAppActive() throws {
+        try activateWhatsApp()
+    }
+
+    func lockUserInputForSend(seconds: Double) {
+        inputLock.lockFor(seconds: seconds)
+    }
+
+    func unlockUserInputAfterSend() {
+        inputLock.unlock()
+    }
+
     func isTrusted(prompt: Bool) -> Bool {
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: prompt] as CFDictionary
         return AXIsProcessTrustedWithOptions(options)
@@ -68,6 +84,23 @@ final class AccessibilityService {
         throw AccessibilityError.actionFailed(-1)
     }
 
+    /// Tries to press a node using AXPress only (no coordinate clicking fallback).
+    /// This is safer for text areas, where a coordinate click can hit an unrelated element.
+    func pressNodeAXOnly(at path: [Int]) throws {
+        guard let app = findWhatsAppApplication() else {
+            throw AccessibilityError.whatsAppNotRunning
+        }
+
+        let root = AXUIElementCreateApplication(app.processIdentifier)
+        guard let element = element(at: path, from: root) else {
+            throw AccessibilityError.nodeNotFound
+        }
+
+        guard AXUIElementPerformAction(element, kAXPressAction as CFString) == .success else {
+            throw AccessibilityError.actionFailed(-1)
+        }
+    }
+
     func setValue(_ newValue: String, at path: [Int]) throws {
         guard let app = findWhatsAppApplication() else {
             throw AccessibilityError.whatsAppNotRunning
@@ -82,6 +115,64 @@ final class AccessibilityService {
         guard result == .success else {
             throw AccessibilityError.actionFailed(result.rawValue)
         }
+    }
+
+    func readValue(at path: [Int]) throws -> String? {
+        guard let app = findWhatsAppApplication() else {
+            throw AccessibilityError.whatsAppNotRunning
+        }
+
+        let root = AXUIElementCreateApplication(app.processIdentifier)
+        guard let element = element(at: path, from: root) else {
+            throw AccessibilityError.nodeNotFound
+        }
+
+        var raw: CFTypeRef?
+        let result = AXUIElementCopyAttributeValue(element, kAXValueAttribute as CFString, &raw)
+        guard result == .success else {
+            throw AccessibilityError.actionFailed(result.rawValue)
+        }
+
+        if let text = raw as? String {
+            return text
+        }
+        return raw.map { String(describing: $0) }
+    }
+
+    func readAllAttributes(at path: [Int]) throws -> [String: String] {
+        guard let app = findWhatsAppApplication() else {
+            throw AccessibilityError.whatsAppNotRunning
+        }
+
+        let root = AXUIElementCreateApplication(app.processIdentifier)
+        guard let element = element(at: path, from: root) else {
+            throw AccessibilityError.nodeNotFound
+        }
+
+        var rawNames: CFArray?
+        let namesResult = AXUIElementCopyAttributeNames(element, &rawNames)
+        guard namesResult == .success, let names = rawNames as? [String] else {
+            throw AccessibilityError.actionFailed(namesResult.rawValue)
+        }
+
+        var result: [String: String] = [:]
+        for name in names.sorted() {
+            var rawValue: CFTypeRef?
+            let valueResult = AXUIElementCopyAttributeValue(element, name as CFString, &rawValue)
+            if valueResult != .success {
+                result[name] = "<error \(valueResult.rawValue)>"
+                continue
+            }
+
+            guard let rawValue else {
+                result[name] = "nil"
+                continue
+            }
+
+            result[name] = describeAXValue(rawValue, depth: 0)
+        }
+
+        return result
     }
 
     func focusNode(at path: [Int]) throws {
@@ -101,6 +192,7 @@ final class AccessibilityService {
     }
 
     func pressEnterKey() throws {
+        try activateWhatsApp()
         guard let source = CGEventSource(stateID: .combinedSessionState) else {
             throw AccessibilityError.actionFailed(-1)
         }
@@ -111,14 +203,30 @@ final class AccessibilityService {
             throw AccessibilityError.actionFailed(-1)
         }
 
+        tagAsSyntheticForInputLock(keyDown)
+        tagAsSyntheticForInputLock(keyUp)
+
         keyDown.post(tap: .cghidEventTap)
         keyUp.post(tap: .cghidEventTap)
     }
 
     func sendText(_ text: String, to path: [Int]) throws {
         try activateWhatsApp()
+        // Make sure the caret is really in the compose field. AXFocused alone isn't always enough.
+        try? pressNodeAXOnly(at: path)
         try focusNode(at: path)
-        try setValue(text, at: path)
+        Thread.sleep(forTimeInterval: 0.05)
+        // Clear via AXValue to avoid global Cmd+A hitting the wrong app if focus is stolen.
+        // (We still use real input events for the actual text to trigger WhatsApp's change pipeline.)
+        try? setValue("", at: path)
+        Thread.sleep(forTimeInterval: 0.02)
+
+        do {
+            try typeTextViaUnicodeEvents(text)
+        } catch {
+            // Fallback: paste via clipboard (Cmd+V). This also tends to trigger input events.
+            try pasteTextViaClipboard(text)
+        }
     }
 
     private func activateWhatsApp() throws {
@@ -126,10 +234,111 @@ final class AccessibilityService {
             throw AccessibilityError.whatsAppNotRunning
         }
 
-        if !app.isActive {
-            app.activate(options: [.activateAllWindows])
-            Thread.sleep(forTimeInterval: 0.15)
+        guard !app.isActive else { return }
+
+        // NSRunningApplication activation is more reliable from the main thread.
+        let activateBlock = {
+            _ = app.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
+            app.unhide()
         }
+        if Thread.isMainThread {
+            activateBlock()
+        } else {
+            DispatchQueue.main.sync(execute: activateBlock)
+        }
+
+        if waitForActive(app, timeoutSeconds: 1.2) {
+            return
+        }
+
+        // Fallback: AppleScript activation can succeed in situations where NSRunningApplication.activate
+        // does not (Spaces/Focus/other foreground constraints).
+        let script = NSAppleScript(source: "tell application \"WhatsApp\" to activate")
+        var error: NSDictionary?
+        _ = script?.executeAndReturnError(&error)
+        if waitForActive(app, timeoutSeconds: 1.2) {
+            return
+        }
+
+        throw AccessibilityError.actionFailed(-2)
+    }
+
+    private func waitForActive(_ app: NSRunningApplication, timeoutSeconds: Double) -> Bool {
+        let deadline = Date().addingTimeInterval(timeoutSeconds)
+        while !app.isActive, Date() < deadline {
+            Thread.sleep(forTimeInterval: 0.05)
+        }
+        return app.isActive
+    }
+
+    private func pasteTextViaClipboard(_ text: String) throws {
+        try activateWhatsApp()
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+        Thread.sleep(forTimeInterval: 0.02)
+
+        // Cmd+V
+        try pressKey(keyCode: 9, flags: .maskCommand) // 'V'
+        Thread.sleep(forTimeInterval: 0.05)
+    }
+
+    private func typeTextViaUnicodeEvents(_ text: String) throws {
+        try activateWhatsApp()
+        guard let source = CGEventSource(stateID: .combinedSessionState) else {
+            throw AccessibilityError.actionFailed(-1)
+        }
+
+        // Send as small unicode chunks to behave like "real typing" and trigger input events.
+        // (CGEvent keyboard events have a max unicode payload; keep it modest.)
+        let scalars = Array(text.unicodeScalars)
+        var idx = 0
+        while idx < scalars.count {
+            let end = min(idx + 20, scalars.count)
+            let chunk = String(String.UnicodeScalarView(scalars[idx..<end]))
+            idx = end
+
+            guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true),
+                  let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false)
+            else {
+                throw AccessibilityError.actionFailed(-1)
+            }
+
+            tagAsSyntheticForInputLock(keyDown)
+            tagAsSyntheticForInputLock(keyUp)
+
+            keyDown.keyboardSetUnicodeString(stringLength: chunk.utf16.count, unicodeString: Array(chunk.utf16))
+            keyUp.keyboardSetUnicodeString(stringLength: chunk.utf16.count, unicodeString: Array(chunk.utf16))
+
+            keyDown.post(tap: .cghidEventTap)
+            keyUp.post(tap: .cghidEventTap)
+            Thread.sleep(forTimeInterval: 0.02)
+        }
+    }
+
+    private func pressKey(keyCode: CGKeyCode, flags: CGEventFlags) throws {
+        try activateWhatsApp()
+        guard let source = CGEventSource(stateID: .combinedSessionState) else {
+            throw AccessibilityError.actionFailed(-1)
+        }
+
+        guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true),
+              let keyUp = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: false)
+        else {
+            throw AccessibilityError.actionFailed(-1)
+        }
+
+        tagAsSyntheticForInputLock(keyDown)
+        tagAsSyntheticForInputLock(keyUp)
+
+        keyDown.flags = flags
+        keyUp.flags = flags
+        keyDown.post(tap: .cghidEventTap)
+        keyUp.post(tap: .cghidEventTap)
+    }
+
+    private func tagAsSyntheticForInputLock(_ event: CGEvent) {
+        event.setIntegerValueField(.eventSourceUserData, value: InputLockService.passthroughTag)
     }
 
     private func captureNode(from element: AXUIElement, path: [Int], depth: Int, maxDepth: Int) -> RawAXNode {
@@ -249,6 +458,92 @@ final class AccessibilityService {
         }
 
         return CGRect(origin: position, size: size)
+    }
+
+    private func describeAXValue(_ value: CFTypeRef, depth: Int) -> String {
+        if let string = value as? String {
+            return string
+        }
+
+        if let number = value as? NSNumber {
+            return number.stringValue
+        }
+
+        if CFGetTypeID(value) == AXUIElementGetTypeID() {
+            let element = unsafeBitCast(value, to: AXUIElement.self)
+            let role: String = self.value(element, attribute: kAXRoleAttribute) ?? "unknown"
+            let title: String? = self.value(element, attribute: kAXTitleAttribute)
+            if let title, !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return "AXUIElement(role=\(role), title=\(title))"
+            }
+            return "AXUIElement(role=\(role))"
+        }
+
+        if CFGetTypeID(value) == AXValueGetTypeID() {
+            let axValue = unsafeBitCast(value, to: AXValue.self)
+            switch AXValueGetType(axValue) {
+            case .cgPoint:
+                var point = CGPoint.zero
+                if AXValueGetValue(axValue, .cgPoint, &point) {
+                    return "CGPoint(x:\(Int(point.x)), y:\(Int(point.y)))"
+                }
+            case .cgSize:
+                var size = CGSize.zero
+                if AXValueGetValue(axValue, .cgSize, &size) {
+                    return "CGSize(w:\(Int(size.width)), h:\(Int(size.height)))"
+                }
+            case .cgRect:
+                var rect = CGRect.zero
+                if AXValueGetValue(axValue, .cgRect, &rect) {
+                    return "CGRect(x:\(Int(rect.minX)), y:\(Int(rect.minY)), w:\(Int(rect.width)), h:\(Int(rect.height)))"
+                }
+            case .cfRange:
+                var range = CFRange()
+                if AXValueGetValue(axValue, .cfRange, &range) {
+                    return "CFRange(loc:\(range.location), len:\(range.length))"
+                }
+            default:
+                break
+            }
+
+            return String(describing: axValue)
+        }
+
+        if let array = value as? [Any] {
+            if array.isEmpty {
+                return "[]"
+            }
+
+            let prefixCount = min(array.count, 5)
+            if depth >= 1 {
+                return "[\(array.count) items]"
+            }
+
+            let items = array.prefix(prefixCount).map { item in
+                describeAXValue(item as CFTypeRef, depth: depth + 1)
+            }
+            let suffix = array.count > prefixCount ? ", …" : ""
+            return "[\(items.joined(separator: ", "))\(suffix)]"
+        }
+
+        if let dict = value as? [String: Any] {
+            if dict.isEmpty {
+                return "{}"
+            }
+            if depth >= 1 {
+                return "{\(dict.count) keys}"
+            }
+            let keys = dict.keys.sorted()
+            let prefixCount = min(keys.count, 8)
+            let parts = keys.prefix(prefixCount).map { key in
+                let value = dict[key] as CFTypeRef?
+                return "\(key)=\(value.map { describeAXValue($0, depth: depth + 1) } ?? "nil")"
+            }
+            let suffix = keys.count > prefixCount ? ", …" : ""
+            return "{\(parts.joined(separator: ", "))\(suffix)}"
+        }
+
+        return String(describing: value)
     }
 }
 

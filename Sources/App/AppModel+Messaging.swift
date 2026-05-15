@@ -19,6 +19,46 @@ extension AppModel {
         await enqueueSendMessage(trimmedMessage, to: selectedChatState.chat.id, clearDraftOnSuccess: true)
     }
 
+    /// Sends a message while coordinating with the accessibility action scheduler.
+    /// This mirrors the UI send flow by canceling background refreshes and pausing polling to avoid races.
+    func sendMessageViaScheduler(_ text: String, to conversationId: String) async throws {
+        await accessibilityScheduler.cancelAll { $0 == .background }
+
+        let resumePollingAfterSend = isPolling
+        if resumePollingAfterSend {
+            stopPolling()
+        }
+
+        defer {
+            if resumePollingAfterSend {
+                startPolling()
+            }
+        }
+
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            Task { [weak self] in
+                guard let self else {
+                    continuation.resume(throwing: CancellationError())
+                    return
+                }
+
+                await self.accessibilityScheduler.enqueue(priority: .critical) { [weak self] in
+                    guard let self else {
+                        continuation.resume(throwing: CancellationError())
+                        return
+                    }
+
+                    do {
+                        try await self.sendMessage(text, to: conversationId)
+                        continuation.resume(returning: ())
+                    } catch {
+                        continuation.resume(throwing: error)
+                    }
+                }
+            }
+        }
+    }
+
     func sendMessage(_ text: String, to conversationId: String) async throws {
         guard prepareForWhatsAppInspection() else {
             throw MCPServerError.invalidRequest
@@ -37,17 +77,30 @@ extension AppModel {
             throw MCPServerError.invalidRequest
         }
 
-        let snapshot = try await openConversationAndCapture(conversation)
-        try interactor.sendMessage(trimmedMessage, in: snapshot, using: accessibility)
-        appendLog("Sent message to \(conversation.name).")
+        _ = try await openConversationAndCapture(conversation)
+        let shouldLockInput = experimentalInputLockEnabled
+        if shouldLockInput {
+            // Experimental: prevent the user from stealing focus mid-send.
+            accessibility.lockUserInputForSend(seconds: 5)
+        }
+        defer {
+            if shouldLockInput {
+                accessibility.unlockUserInputAfterSend()
+            }
+        }
+        appendLog("Sending message to \(conversation.name)…")
+        let verification = try await interactor.sendMessageConfirmed(
+            trimmedMessage,
+            expectedChatName: conversation.name,
+            using: accessibility,
+            parser: parser
+        )
 
-        try await Task.sleep(for: .milliseconds(500))
+        writeDebugArtifacts(snapshot: verification.snapshot, screenState: verification.state, prefix: "send-\(conversation.id)")
+        memoryStore.replaceConversations(verification.state.conversations)
+        updateSelectedChatState(from: verification.state, preferredConversation: conversation)
 
-        let refreshedSnapshot = try accessibility.captureWhatsAppSnapshot(maxDepth: 14)
-        let refreshedState = parser.parse(snapshot: refreshedSnapshot, messageLimit: 10)
-        writeDebugArtifacts(snapshot: refreshedSnapshot, screenState: refreshedState, prefix: "send-\(conversation.id)")
-        memoryStore.replaceConversations(refreshedState.conversations)
-        updateSelectedChatState(from: refreshedState, preferredConversation: conversation)
+        appendLog("Sent message to \(conversation.name) confirmed in UI.")
     }
 
     private func enqueueSendMessage(_ text: String, to conversationId: String, clearDraftOnSuccess: Bool) async {
@@ -81,4 +134,7 @@ extension AppModel {
             }
         }
     }
+
+    // Message send verification lives inside WhatsAppInteractor to keep the send flow fully
+    // orchestrated in one place (type -> confirm -> enter -> confirm -> retry).
 }

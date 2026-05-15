@@ -105,33 +105,34 @@ final class WhatsAppMemoryStore: ObservableObject {
         conversations.first(where: { $0.id == id })
     }
 
-    // 12 Hours Timeout
-    func waitForNextMessage(chatId: String?, afterMessageId: String?, timeoutSeconds: Int = 43200) async -> WaitForMessageResult? {
+    /// Wait indefinitely (no timeout) until a new message arrives.
+    /// If you need a timeout, implement it at the caller level.
+    func waitForNextMessage(chatId: String?, afterMessageId: String?, timeoutSeconds: Int? = nil) async -> WaitForMessageResult? {
         if let immediateMatch = latestMessageResult(chatId: chatId, afterMessageId: afterMessageId) {
             return immediateMatch
         }
 
-        return await withCheckedContinuation { continuation in
+        @MainActor
+        final class Waiter {
             var resolved = false
             var listenerId: UUID?
-
-            func finish(_ result: WaitForMessageResult?) {
-                Task { @MainActor in
-                    guard !resolved else {
-                        return
-                    }
-
-                    resolved = true
-
-                    if let listenerId {
-                        removeEventListener(listenerId)
-                    }
-
-                    continuation.resume(returning: result)
-                }
+            let continuation: CheckedContinuation<WaitForMessageResult?, Never>
+            init(continuation: CheckedContinuation<WaitForMessageResult?, Never>) {
+                self.continuation = continuation
             }
 
-            listenerId = addEventListener { event in
+            func finish(_ result: WaitForMessageResult?, remove: (UUID) -> Void) {
+                guard !resolved else { return }
+                resolved = true
+                if let listenerId { remove(listenerId) }
+                continuation.resume(returning: result)
+            }
+        }
+
+        return await withCheckedContinuation { continuation in
+            let waiter = Waiter(continuation: continuation)
+
+            waiter.listenerId = addEventListener { event in
                 guard case .chatStateUpdated(let chatState) = event else {
                     return
                 }
@@ -148,12 +149,14 @@ final class WhatsAppMemoryStore: ObservableObject {
                     return
                 }
 
-                finish(WaitForMessageResult(chat: chatState.chat, message: latestMessage))
+                waiter.finish(WaitForMessageResult(chat: chatState.chat, message: latestMessage), remove: self.removeEventListener)
             }
 
-            Task { @MainActor in
-                try? await Task.sleep(for: .seconds(timeoutSeconds))
-                finish(nil)
+            if let timeoutSeconds {
+                Task { @MainActor in
+                    try? await Task.sleep(for: .seconds(timeoutSeconds))
+                    waiter.finish(nil, remove: self.removeEventListener)
+                }
             }
         }
     }

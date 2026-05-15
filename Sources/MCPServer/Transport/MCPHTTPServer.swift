@@ -1,37 +1,46 @@
 import Foundation
+import MCP
 import Network
 
-final class MCPHTTPServer: MCPServerTransporting {
-    private final class StartResolution {
+final class MCPHTTPServer: MCPHTTPServerHosting, @unchecked Sendable {
+    private final class StartResolution: @unchecked Sendable {
         var hasResolved = false
     }
 
     private let queue = DispatchQueue(label: "dev.wads.AssistantMCPServer.mcp", qos: .userInitiated)
-    private let encoder = JSONEncoder()
 
     private var listener: NWListener?
-    private var handler: (@Sendable (MCPHTTPRequest) async -> Result<JSONValue, Error>)?
     private var stateHandler: (@Sendable (MCPServerState) -> Void)?
+    private var callHandler: (@Sendable (MCPServerCallEntry) -> Void)?
     private(set) var isRunning = false
     private(set) var boundPort: Int = 8080
     private var host = "localhost"
+    private var transport: StatelessHTTPServerTransport?
 
     func configure(host: String, port: Int) {
         self.host = host
         self.boundPort = port
     }
 
-    func setRequestHandler(_ handler: @escaping @Sendable (MCPHTTPRequest) async -> Result<JSONValue, Error>) {
-        self.handler = handler
-    }
-
     func setStateHandler(_ handler: @escaping @Sendable (MCPServerState) -> Void) {
         self.stateHandler = handler
+    }
+
+    func setCallHandler(_ handler: @escaping @Sendable (MCPServerCallEntry) -> Void) {
+        self.callHandler = handler
+    }
+
+    func setTransport(_ transport: StatelessHTTPServerTransport) {
+        self.transport = transport
     }
 
     func start() async throws {
         guard listener == nil else {
             return
+        }
+
+        guard transport != nil else {
+            throw MCPServerError.invalidParameter("transport")
         }
 
         guard let port = NWEndpoint.Port(rawValue: UInt16(boundPort)) else {
@@ -101,7 +110,11 @@ final class MCPHTTPServer: MCPServerTransporting {
             }
 
             if let error {
-                let payload = self.httpResponse(status: 500, body: self.errorPayload(message: error.localizedDescription))
+                let payload = self.httpResponse(
+                    status: 500,
+                    body: Data("Internal Server Error.\n".utf8),
+                    contentType: "text/plain; charset=utf-8"
+                )
                 self.respond(on: connection, payload: payload)
                 return
             }
@@ -120,7 +133,11 @@ final class MCPHTTPServer: MCPServerTransporting {
             }
 
             if isComplete {
-                let payload = self.httpResponse(status: 400, body: self.errorPayload(message: MCPServerError.invalidRequest.localizedDescription))
+                let payload = self.httpResponse(
+                    status: 400,
+                    body: Data("Bad Request.\n".utf8),
+                    contentType: "text/plain; charset=utf-8"
+                )
                 self.respond(on: connection, payload: payload)
                 return
             }
@@ -130,55 +147,200 @@ final class MCPHTTPServer: MCPServerTransporting {
     }
 
     private func process(request: IncomingHTTPRequest) async -> Data {
-        switch request.method {
-        case "GET":
-            guard request.path == "/mcp" else {
-                return httpResponse(status: 404, body: errorPayload(message: "Route not found."))
-            }
-            return httpResponse(status: 200, body: healthPayload())
-        case "POST":
-            guard request.path == "/mcp" else {
-                return httpResponse(status: 404, body: errorPayload(message: "Route not found."))
-            }
-        default:
-            return httpResponse(status: 405, body: errorPayload(message: "Use POST /mcp for JSON-RPC requests."))
+        let startedAt = DispatchTime.now()
+
+        let statusCode: Int
+        let headers: [String: String]
+        let body: Data
+        let contentType: String?
+
+        guard let transport else {
+            statusCode = 503
+            headers = [:]
+            body = Data("MCP transport not configured.\n".utf8)
+            contentType = "text/plain; charset=utf-8"
+            return finalizeAndLog(
+                request: request,
+                startedAt: startedAt,
+                statusCode: statusCode,
+                headers: headers,
+                body: body,
+                contentType: contentType
+            )
         }
 
-        do {
-            let request = try decodeRequest(from: request.body)
-            guard let handler else {
-                return httpResponse(status: 503, body: errorPayload(message: "MCP handler not configured."))
-            }
-
-            let result = await handler(request)
-            switch result {
-            case .success(let value):
-                return httpResponse(status: 200, body: successPayload(id: request.id, result: value))
-            case .failure(let error):
-                return httpResponse(status: 400, body: errorPayload(id: request.id, message: error.localizedDescription))
-            }
-        } catch {
-            return httpResponse(status: 400, body: errorPayload(message: error.localizedDescription))
+        if request.method == "GET", request.path.hasPrefix("/.well-known/") {
+            statusCode = 404
+            headers = [:]
+            body = Data("Not Found.\n".utf8)
+            contentType = "text/plain; charset=utf-8"
+            return finalizeAndLog(
+                request: request,
+                startedAt: startedAt,
+                statusCode: statusCode,
+                headers: headers,
+                body: body,
+                contentType: contentType
+            )
         }
+
+        if request.method == "GET", request.path == "/health" {
+            let payload = [
+                "ok": true,
+                "service": "AssistantMCPServer MCP bridge",
+                "transport": "MCP Swift SDK (Stateless HTTP)",
+                "endpoint": "http://\(host):\(boundPort)/mcp"
+            ] as [String: Any]
+            statusCode = 200
+            headers = [:]
+            body = (try? JSONSerialization.data(withJSONObject: payload)) ?? Data()
+            contentType = nil
+            return finalizeAndLog(
+                request: request,
+                startedAt: startedAt,
+                statusCode: statusCode,
+                headers: headers,
+                body: body,
+                contentType: contentType
+            )
+        }
+
+        if request.method == "POST", request.path == "/mcp" {
+            if let response = handleInitializeRequestIfNeeded(body: request.body) {
+                statusCode = 200
+                headers = ["content-type": "application/json; charset=utf-8"]
+                body = response
+                contentType = nil
+                return finalizeAndLog(
+                    request: request,
+                    startedAt: startedAt,
+                    statusCode: statusCode,
+                    headers: headers,
+                    body: body,
+                    contentType: contentType
+                )
+            }
+        }
+
+        if request.method == "GET", request.path == "/mcp" {
+            let acceptHeader = request.headers["accept"]?.lowercased() ?? ""
+            if !acceptHeader.contains("text/event-stream") {
+                statusCode = 405
+                headers = ["allow": "POST"]
+                body = Data("Method Not Allowed.\n".utf8)
+                contentType = "text/plain; charset=utf-8"
+                return finalizeAndLog(
+                    request: request,
+                    startedAt: startedAt,
+                    statusCode: statusCode,
+                    headers: headers,
+                    body: body,
+                    contentType: contentType
+                )
+            }
+        }
+
+        var forwardedHeaders = request.headers
+        if request.path == "/mcp" {
+            let acceptHeader = forwardedHeaders["accept"]?.lowercased()
+            let wantsJSON = acceptHeader?.contains("application/json") ?? false
+            let wantsSSE = acceptHeader?.contains("text/event-stream") ?? false
+            if acceptHeader == nil || acceptHeader == "*/*" || (!wantsJSON && !wantsSSE) {
+                forwardedHeaders["accept"] = "application/json"
+            }
+        }
+
+        let httpRequest = HTTPRequest(
+            method: request.method,
+            headers: forwardedHeaders,
+            body: request.body,
+            path: request.path
+        )
+
+        let response = await transport.handleRequest(httpRequest)
+        statusCode = response.statusCode
+        headers = response.headers
+        body = response.bodyData ?? Data()
+        contentType = nil
+
+        return finalizeAndLog(
+            request: request,
+            startedAt: startedAt,
+            statusCode: statusCode,
+            headers: headers,
+            body: body,
+            contentType: contentType
+        )
     }
 
-    private func decodeRequest(from body: Data) throws -> MCPHTTPRequest {
+    private func handleInitializeRequestIfNeeded(body: Data) -> Data? {
         guard
-            let payloadObject = try JSONSerialization.jsonObject(with: body) as? [String: Any],
-            let method = payloadObject["method"] as? String
+            let object = try? JSONSerialization.jsonObject(with: body) as? [String: Any],
+            let method = object["method"] as? String,
+            method == "initialize"
         else {
-            throw MCPServerError.invalidRequest
+            return nil
         }
 
-        let id = payloadObject["id"].flatMap(JSONValue.from(any:))
-        let params: [String: JSONValue]
-        if let paramsObject = payloadObject["params"] as? [String: Any] {
-            params = paramsObject.compactMapValues { JSONValue.from(any: $0) }
-        } else {
-            params = [:]
-        }
+        let id = object["id"] ?? NSNull()
+        let params = object["params"] as? [String: Any]
+        let requestedProtocolVersion = params?["protocolVersion"] as? String
 
-        return MCPHTTPRequest(id: id, method: method, params: params)
+        let negotiatedProtocolVersion = requestedProtocolVersion ?? "2024-11-05"
+
+        let result: [String: Any] = [
+            "protocolVersion": negotiatedProtocolVersion,
+            "capabilities": [
+                "tools": [
+                    "listChanged": true
+                ]
+            ],
+            "serverInfo": [
+                "name": "assistant-whatsapp",
+                "version": "0.1.0"
+            ]
+        ]
+
+        let payload: [String: Any] = [
+            "jsonrpc": "2.0",
+            "id": id,
+            "result": result
+        ]
+
+        return (try? JSONSerialization.data(withJSONObject: payload)) ?? Data()
+    }
+
+    private func finalizeAndLog(
+        request: IncomingHTTPRequest,
+        startedAt: DispatchTime,
+        statusCode: Int,
+        headers: [String: String],
+        body: Data,
+        contentType: String?
+    ) -> Data {
+        let elapsedNanoseconds = DispatchTime.now().uptimeNanoseconds - startedAt.uptimeNanoseconds
+        let durationMilliseconds = Int(elapsedNanoseconds / 1_000_000)
+
+        callHandler?(
+            MCPServerCallEntry(
+                durationMilliseconds: durationMilliseconds,
+                requestMethod: request.method,
+                requestPath: request.path,
+                requestHeaders: request.headers,
+                requestBody: capBody(request.body),
+                responseStatusCode: statusCode,
+                responseHeaders: headers,
+                responseBody: capBody(body)
+            )
+        )
+
+        return httpResponse(status: statusCode, headers: headers, body: body, contentType: contentType)
+    }
+
+    private func capBody(_ data: Data) -> Data {
+        let limitBytes = 256 * 1024
+        guard data.count > limitBytes else { return data }
+        return data.prefix(limitBytes)
     }
 
     private func parseHTTPRequest(from data: Data) -> IncomingHTTPRequest? {
@@ -216,7 +378,20 @@ final class MCPHTTPServer: MCPServerTransporting {
         }
 
         let body = data.subdata(in: bodyStart..<(bodyStart + contentLength))
-        return IncomingHTTPRequest(method: method, path: path, body: body)
+        let parsedHeaders = parseHeaders(headerLines.dropFirst())
+        return IncomingHTTPRequest(method: method, path: path, headers: parsedHeaders, body: body)
+    }
+
+    private func parseHeaders(_ lines: ArraySlice<String>) -> [String: String] {
+        var headers: [String: String] = [:]
+        for line in lines {
+            guard let separatorIndex = line.firstIndex(of: ":") else { continue }
+            let name = line[..<separatorIndex].trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            let value = line[line.index(after: separatorIndex)...].trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty else { continue }
+            headers[name] = value
+        }
+        return headers
     }
 
     private func respond(on connection: NWConnection, payload: Data) {
@@ -225,60 +400,25 @@ final class MCPHTTPServer: MCPServerTransporting {
         })
     }
 
-    private func successPayload(id: JSONValue?, result: JSONValue) -> Data {
-        let payload: JSONValue = .object([
-            "jsonrpc": .string("2.0"),
-            "id": id ?? .null,
-            "result": result
-        ])
-
-        return (try? encoder.encode(payload)) ?? Data()
-    }
-
-    private func errorPayload(id: JSONValue? = nil, message: String) -> Data {
-        let payload: JSONValue = .object([
-            "jsonrpc": .string("2.0"),
-            "id": id ?? .null,
-            "error": .object([
-                "message": .string(message)
-            ])
-        ])
-
-        return (try? encoder.encode(payload)) ?? Data()
-    }
-
-    private func healthPayload() -> Data {
-        let payload: JSONValue = .object([
-            "ok": .bool(true),
-            "service": .string("AssistantMCPServer MCP bridge"),
-            "transport": .string("HTTP JSON-RPC"),
-            "endpoint": .string("http://\(host):\(boundPort)/mcp"),
-            "message": .string("Use POST /mcp with JSON-RPC. Browser GET is only a health check."),
-            "supportedMethods": .array([
-                .string("initialize"),
-                .string("ping"),
-                .string("tools/list"),
-                .string("tools/call")
-            ])
-        ])
-
-        return (try? encoder.encode(payload)) ?? Data()
-    }
-
-    private func httpResponse(status: Int, body: Data) -> Data {
+    private func httpResponse(status: Int, headers: [String: String] = [:], body: Data, contentType: String? = nil) -> Data {
         let statusText: String
         switch status {
         case 200: statusText = "OK"
         case 400: statusText = "Bad Request"
         case 404: statusText = "Not Found"
         case 405: statusText = "Method Not Allowed"
+        case 403: statusText = "Forbidden"
         case 503: statusText = "Service Unavailable"
         default: statusText = "Internal Server Error"
         }
 
         var response = "HTTP/1.1 \(status) \(statusText)\r\n"
         response += "Host: \(host)\r\n"
-        response += "Content-Type: application/json\r\n"
+        let resolvedContentType = contentType ?? headers["Content-Type"] ?? headers["content-type"] ?? "application/json"
+        response += "Content-Type: \(resolvedContentType)\r\n"
+        for (name, value) in headers where name.lowercased() != "content-type" && name.lowercased() != "content-length" && name.lowercased() != "connection" && name.lowercased() != "host" {
+            response += "\(name): \(value)\r\n"
+        }
         response += "Content-Length: \(body.count)\r\n"
         response += "Connection: close\r\n\r\n"
 

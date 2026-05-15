@@ -2,43 +2,77 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject private var appModel: AppModel
-    @State private var selectedScreen: SidebarScreen? = .conversations
+    @State private var selectedScreen: SidebarScreen = .whatsAppChats
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
     enum SidebarScreen: String, CaseIterable, Identifiable {
-        case conversations
+        case nicknames
+        case subjects
+        case memories
+        case clientVoice
+        case whatsAppChats
+        case integrationLogs
+        case integrationDebug
+        case serverLogs
         case settings
-        case logs
-        case debug
 
         var id: String { rawValue }
 
         var title: String {
             switch self {
-            case .conversations: "Conversations"
+            case .nicknames: "Nicknames"
+            case .subjects: "Subjects"
+            case .memories: "Memories"
+            case .clientVoice: "Client Voice"
+            case .whatsAppChats: "WhatsApp"
+            case .integrationLogs: "Logs"
+            case .integrationDebug: "Debug"
+            case .serverLogs: "Logs"
             case .settings: "Settings"
-            case .logs: "Logs"
-            case .debug: "Debug"
             }
         }
 
         var systemImage: String {
             switch self {
-            case .conversations: "bubble.left.and.bubble.right"
+            case .nicknames: "tag"
+            case .subjects: "checklist"
+            case .memories: "brain"
+            case .clientVoice: "waveform"
+            case .whatsAppChats: "bubble.left.and.bubble.right"
+            case .integrationLogs: "list.bullet.rectangle"
+            case .integrationDebug: "point.3.connected.trianglepath.dotted"
+            case .serverLogs: "server.rack"
             case .settings: "gearshape"
-            case .logs: "list.bullet.rectangle"
-            case .debug: "point.3.connected.trianglepath.dotted"
             }
         }
     }
 
     var body: some View {
-        NavigationSplitView {
-            List(selection: $selectedScreen) {
-                ForEach(SidebarScreen.allCases) { screen in
-                    Label(screen.title, systemImage: screen.systemImage)
-                        .tag(screen)
+        NavigationSplitView(columnVisibility: $columnVisibility) {
+            List(selection: Binding(get: { selectedScreen }, set: { selectedScreen = $0 ?? selectedScreen })) {
+                Section("Data") {
+                    sidebarItem(.nicknames)
+                    sidebarItem(.subjects)
+                    sidebarItem(.memories)
+                    sidebarItem(.clientVoice)
+                }
+
+                Section("WhatsApp Integration") {
+                    sidebarItem(.whatsAppChats)
+                    sidebarItem(.integrationLogs)
+                    sidebarItem(.integrationDebug)
+                }
+
+                Section("Server") {
+                    sidebarItem(.serverLogs)
+                }
+
+                Section("Settings") {
+                    sidebarItem(.settings)
                 }
             }
+            .listStyle(.sidebar)
+            .navigationSplitViewColumnWidth(min: 220, ideal: 240, max: 360)
             .navigationTitle("Assistant MCP")
         } detail: {
             VStack(spacing: 0) {
@@ -52,26 +86,60 @@ struct ContentView: View {
 
     private var selectedDetailView: some View {
         Group {
-            switch selectedScreen ?? .conversations {
-            case .conversations:
+            switch selectedScreen {
+            case .nicknames:
+                NicknamesScreen()
+            case .subjects:
+                SubjectsScreen()
+            case .memories:
+                MemoriesScreen()
+            case .clientVoice:
+                ClientVoiceScreen()
+            case .whatsAppChats:
                 ConversationsScreen()
             case .settings:
                 SettingsScreen(appModel: appModel)
                     .padding(12)
-            case .logs:
+            case .integrationLogs:
                 LogsScreen()
-            case .debug:
+            case .integrationDebug:
                 DebugTreeScreen()
+            case .serverLogs:
+                ServerLogsScreen()
             }
         }
     }
 
+    private func sidebarItem(_ screen: SidebarScreen) -> some View {
+        Label(screen.title, systemImage: screen.systemImage)
+            .tag(screen)
+    }
+
     private var headerBar: some View {
         HStack(spacing: 10) {
-            Text((selectedScreen ?? .conversations).title)
+            Text(selectedScreen.title)
                 .font(.title3.weight(.semibold))
 
             Spacer()
+
+            if appModel.pendingClientAskCount > 0 {
+                Button {
+                    selectedScreen = .clientVoice
+                } label: {
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(Color.yellow)
+                            .frame(width: 8, height: 8)
+                        Text("Client response pending (\(appModel.pendingClientAskCount))")
+                            .font(.caption.weight(.semibold))
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color.yellow.opacity(0.12), in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .help("Open Client Voice")
+            }
 
             BridgeStatusBadge(
                 accessibilityTrusted: appModel.accessibilityTrusted,
