@@ -6,8 +6,10 @@ extension AppModel {
         memoryStore.selectConversation(id: conversation.id)
     }
 
-    func clearConversationHistoryCache() {
-        memoryStore.clearAllCachedChatHistories()
+    func resetWhatsAppIntegrationState() {
+        memoryStore.resetAll()
+        listSignaturesById = [:]
+        persistChatListSignatures()
     }
 
     func bindMemoryStore() {

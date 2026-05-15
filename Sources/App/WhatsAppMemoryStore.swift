@@ -114,6 +114,18 @@ final class WhatsAppMemoryStore: ObservableObject {
         }
     }
 
+    /// Resets all WhatsApp in-memory state (conversation list + cached messages + selection).
+    /// Does not touch allow/deny lists (stored elsewhere).
+    func resetAll() {
+        conversations = []
+        chatStatesById.removeAll(keepingCapacity: false)
+        selectedConversationId = nil
+        selectedChatState = nil
+
+        emit(.conversationsUpdated([]))
+        emit(.selectedConversationChanged(nil))
+    }
+
     func chatState(for id: String) -> ChatState? {
         chatStatesById[id]
     }

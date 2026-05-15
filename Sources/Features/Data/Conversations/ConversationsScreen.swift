@@ -16,22 +16,20 @@ struct ConversationsScreen: View {
                             showingClearHistoryConfirmation = true
                         }
                         .controlSize(.small)
-                        .help("Clears all cached message history for every conversation (keeps the conversation list and allow/deny lists).")
+                        .help("Clears all saved WhatsApp data for the integration (keeps allow/deny lists).")
 
                         Text("\(appModel.conversations.count)")
                             .font(.caption.monospacedDigit())
                             .foregroundStyle(.secondary)
                     }
                     .confirmationDialog(
-                        "Clear all conversation history?",
+                        "Clear all WhatsApp data?",
                         isPresented: $showingClearHistoryConfirmation,
                         titleVisibility: .visible
                     ) {
-                        Button("Clear history", role: .destructive) {
-                            appModel.clearConversationHistoryCache()
+                        Button("Clear", role: .destructive) {
+                            appModel.resetWhatsAppIntegrationState()
                         }
-                    } message: {
-                        Text("This removes all cached messages and per-chat state from the integration. It won’t change the WhatsApp app itself, the conversation list, or your allow/deny lists.")
                     }
 
                     ForEach(appModel.conversations) { conversation in
