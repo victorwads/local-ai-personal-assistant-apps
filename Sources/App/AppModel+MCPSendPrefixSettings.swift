@@ -15,8 +15,8 @@ extension AppModel {
     }
 
     func applyMCPSendMessagePrefixIfNeeded(_ text: String) -> String {
-        let prefix = mcpSendMessagePrefix
-        guard !prefix.isEmpty else { return text }
-        return prefix + text
+        let assistantName = mcpSendMessagePrefix.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !assistantName.isEmpty else { return text }
+        return "\(assistantName):\n\(text)"
     }
 }

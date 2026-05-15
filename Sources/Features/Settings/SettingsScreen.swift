@@ -201,14 +201,14 @@ struct SettingsScreen: View {
                             .foregroundStyle(.secondary)
 
                         HStack {
-                            Text("Prefix")
+                            Text("Assistant name")
                             Spacer()
-                            TextField("e.g. Robozinho: ", text: $appModel.mcpSendMessagePrefix)
+                            TextField("e.g. Robozinho", text: $appModel.mcpSendMessagePrefix)
                                 .textFieldStyle(.roundedBorder)
                                 .frame(width: 260)
                         }
 
-                        Text("Applied only to MCP tool `send_message` (not to manual sends from the UI).")
+                        Text("Used only for MCP tool `send_message`; it will be formatted as `Name:\\nmessage`.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
 
