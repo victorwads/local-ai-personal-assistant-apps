@@ -1,6 +1,11 @@
-# Codex WhatsApp Assistant (Plugin)
+# AssistantMCPServer (Local) — Codex Plugin
 
-Este plugin conecta o Codex a um MCP Server local que controla o WhatsApp Desktop, para você usar o Codex como **assistente pessoal** (ler mensagens, resumir pendências e responder).
+Este plugin conecta o Codex ao **AssistantMCPServer local**, que expõe tools via MCP para operar:
+
+- WhatsApp Desktop (ler/enviar, nicknames, acompanhar respostas)
+- Voz com o cliente (hands-free: anunciar e perguntar)
+- Subjects (assuntos em andamento)
+- Memories (memória persistente)
 
 ## Requisitos
 
@@ -12,12 +17,13 @@ Este plugin conecta o Codex a um MCP Server local que controla o WhatsApp Deskto
 
 1. Inicie o Assistant MCP Server.
 2. Abra o WhatsApp Desktop.
-3. No Codex, habilite o plugin **Codex WhatsApp Assistant** e use as ferramentas expostas pelo MCP server (ex.: `list_chats`, `get_recent_messages`, `send_message`).
+3. No Codex, habilite o plugin **AssistantMCPServer (Local)** e use as ferramentas expostas pelo MCP server (ex.: `list_chats`, `get_recent_messages`, `send_message`, `speak_to_client`, `ask_to_client`).
 
 ## Dicas
 
 - Apelidos (nicknames): para chamar contatos por “mãe”, “namorado”, “Léo”, use `save_nickname(...)` e depois resolva com `list_nicknames()`.
-- Skill abrangente: use a skill `assistant` quando o fluxo envolver também Gmail e Google Calendar (follow-ups, agendamentos, convites).
+- Skill abrangente: use a skill `assistant` para orquestrar WhatsApp + Gmail + Calendar (follow-ups, agendamentos, convites).
+- Catálogo de tools locais: use a skill `assistantmcpserver` para referência rápida de tools (WhatsApp + voz + Subjects/Memories).
 
 ## Ajustes
 

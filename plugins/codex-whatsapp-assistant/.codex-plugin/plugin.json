@@ -18,9 +18,9 @@
   "skills": "./skills/",
   "mcpServers": "./.mcp.json",
   "interface": {
-    "displayName": "Codex WhatsApp Assistant",
-    "shortDescription": "Assistente pessoal no WhatsApp Desktop",
-    "longDescription": "Conecta no seu MCP Server local para ler/enviar mensagens no WhatsApp Desktop e te ajudar como assistente pessoal (resumos, rascunhos e respostas). Suporta apelidos (nicknames) para você se referir a contatos por nomes como “mãe” e “namorado”. Requer o WhatsApp Desktop aberto e o Assistant MCP Server rodando (ex.: http://localhost:8080/mcp).",
+    "displayName": "AssistantMCPServer (Local)",
+    "shortDescription": "Operações locais: WhatsApp + voz + Subjects/Memories",
+    "longDescription": "Conecta no seu AssistantMCPServer local (MCP via HTTP) para operar WhatsApp Desktop (ler/enviar, nicknames, acompanhar respostas), falar com o cliente por voz (hands-free) e gerenciar Subjects/Memories. Requer o WhatsApp Desktop aberto e o AssistantMCPServer rodando (ex.: http://localhost:8080/mcp).",
     "developerName": "Victor Wads",
     "category": "Productivity",
     "capabilities": [
@@ -31,10 +31,11 @@
     "privacyPolicyURL": "https://github.com/victorwads/ai-macos-whatszap-controller-assistant",
     "termsOfServiceURL": "https://github.com/victorwads/ai-macos-whatszap-controller-assistant",
     "defaultPrompt": [
-      "Envie uma mensagem para um contato específico.",
-      "Resuma as mensagens não lidas do WhatsApp.",
-      "Busque a última mensagem de um chat.",
-      "Salve um apelido (nickname) para um contato."
+      "Resuma as mensagens não lidas e sugira respostas.",
+      "Envie uma mensagem para um contato (usando nickname).",
+      "Pergunte algo por voz ao cliente (hands-free).",
+      "Crie um Subject para acompanhar uma consulta/reunião.",
+      "Liste e delete Memories."
     ],
     "brandColor": "#25D366",
     "composerIcon": "./assets/icon.png",
