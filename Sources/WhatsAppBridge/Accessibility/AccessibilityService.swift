@@ -139,6 +139,42 @@ final class AccessibilityService {
         return raw.map { String(describing: $0) }
     }
 
+    func readAllAttributes(at path: [Int]) throws -> [String: String] {
+        guard let app = findWhatsAppApplication() else {
+            throw AccessibilityError.whatsAppNotRunning
+        }
+
+        let root = AXUIElementCreateApplication(app.processIdentifier)
+        guard let element = element(at: path, from: root) else {
+            throw AccessibilityError.nodeNotFound
+        }
+
+        var rawNames: CFArray?
+        let namesResult = AXUIElementCopyAttributeNames(element, &rawNames)
+        guard namesResult == .success, let names = rawNames as? [String] else {
+            throw AccessibilityError.actionFailed(namesResult.rawValue)
+        }
+
+        var result: [String: String] = [:]
+        for name in names.sorted() {
+            var rawValue: CFTypeRef?
+            let valueResult = AXUIElementCopyAttributeValue(element, name as CFString, &rawValue)
+            if valueResult != .success {
+                result[name] = "<error \(valueResult.rawValue)>"
+                continue
+            }
+
+            guard let rawValue else {
+                result[name] = "nil"
+                continue
+            }
+
+            result[name] = describeAXValue(rawValue, depth: 0)
+        }
+
+        return result
+    }
+
     func focusNode(at path: [Int]) throws {
         guard let app = findWhatsAppApplication() else {
             throw AccessibilityError.whatsAppNotRunning
@@ -422,6 +458,92 @@ final class AccessibilityService {
         }
 
         return CGRect(origin: position, size: size)
+    }
+
+    private func describeAXValue(_ value: CFTypeRef, depth: Int) -> String {
+        if let string = value as? String {
+            return string
+        }
+
+        if let number = value as? NSNumber {
+            return number.stringValue
+        }
+
+        if CFGetTypeID(value) == AXUIElementGetTypeID() {
+            let element = unsafeBitCast(value, to: AXUIElement.self)
+            let role: String = self.value(element, attribute: kAXRoleAttribute) ?? "unknown"
+            let title: String? = self.value(element, attribute: kAXTitleAttribute)
+            if let title, !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return "AXUIElement(role=\(role), title=\(title))"
+            }
+            return "AXUIElement(role=\(role))"
+        }
+
+        if CFGetTypeID(value) == AXValueGetTypeID() {
+            let axValue = unsafeBitCast(value, to: AXValue.self)
+            switch AXValueGetType(axValue) {
+            case .cgPoint:
+                var point = CGPoint.zero
+                if AXValueGetValue(axValue, .cgPoint, &point) {
+                    return "CGPoint(x:\(Int(point.x)), y:\(Int(point.y)))"
+                }
+            case .cgSize:
+                var size = CGSize.zero
+                if AXValueGetValue(axValue, .cgSize, &size) {
+                    return "CGSize(w:\(Int(size.width)), h:\(Int(size.height)))"
+                }
+            case .cgRect:
+                var rect = CGRect.zero
+                if AXValueGetValue(axValue, .cgRect, &rect) {
+                    return "CGRect(x:\(Int(rect.minX)), y:\(Int(rect.minY)), w:\(Int(rect.width)), h:\(Int(rect.height)))"
+                }
+            case .cfRange:
+                var range = CFRange()
+                if AXValueGetValue(axValue, .cfRange, &range) {
+                    return "CFRange(loc:\(range.location), len:\(range.length))"
+                }
+            default:
+                break
+            }
+
+            return String(describing: axValue)
+        }
+
+        if let array = value as? [Any] {
+            if array.isEmpty {
+                return "[]"
+            }
+
+            let prefixCount = min(array.count, 5)
+            if depth >= 1 {
+                return "[\(array.count) items]"
+            }
+
+            let items = array.prefix(prefixCount).map { item in
+                describeAXValue(item as CFTypeRef, depth: depth + 1)
+            }
+            let suffix = array.count > prefixCount ? ", …" : ""
+            return "[\(items.joined(separator: ", "))\(suffix)]"
+        }
+
+        if let dict = value as? [String: Any] {
+            if dict.isEmpty {
+                return "{}"
+            }
+            if depth >= 1 {
+                return "{\(dict.count) keys}"
+            }
+            let keys = dict.keys.sorted()
+            let prefixCount = min(keys.count, 8)
+            let parts = keys.prefix(prefixCount).map { key in
+                let value = dict[key] as CFTypeRef?
+                return "\(key)=\(value.map { describeAXValue($0, depth: depth + 1) } ?? "nil")"
+            }
+            let suffix = keys.count > prefixCount ? ", …" : ""
+            return "{\(parts.joined(separator: ", "))\(suffix)}"
+        }
+
+        return String(describing: value)
     }
 }
 

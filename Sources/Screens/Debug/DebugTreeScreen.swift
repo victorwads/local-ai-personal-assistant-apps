@@ -9,6 +9,10 @@ struct DebugTreeScreen: View {
     @EnvironmentObject private var appModel: AppModel
     @StateObject private var model = DebugTreeViewModel()
     @StateObject private var previewModel = DebugTreePreviewModel()
+    @State private var attributeQuery = ""
+    @State private var selectedAttributes: [(key: String, value: String)] = []
+    @State private var selectedAttributesError: String?
+    @State private var isLoadingAttributes = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -24,7 +28,7 @@ struct DebugTreeScreen: View {
                         List(selection: $model.selectedNodePath) {
                             treeNode(snapshot.rootNode)
                         }
-                        .frame(minWidth: 520)
+                        .frame(minWidth: 320, idealWidth: 520, maxWidth: .infinity)
                         .onChange(of: model.scrollToNodeId) { _, newValue in
                             guard let newValue else { return }
                             withAnimation(.snappy) {
@@ -39,6 +43,8 @@ struct DebugTreeScreen: View {
                             Divider()
                             nodeSummary(selectedNode, title: "Selected Node")
                             Divider()
+                            attributesSection(path: model.selectedNodePath ?? appModel.debugNodePath)
+                            Divider()
                             previewSection
                             Divider()
                             favoritesSection
@@ -46,7 +52,7 @@ struct DebugTreeScreen: View {
                         .padding(12)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .frame(minWidth: 420)
+                    .frame(minWidth: 320, maxWidth: .infinity)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .onChange(of: appModel.debugNodePath) { _, newValue in
@@ -61,6 +67,11 @@ struct DebugTreeScreen: View {
                     model.handleSelectionChanged(snapshot: snapshot)
                     previewModel.setLoadingImmediatelyIfNeeded(snapshot: snapshot, path: model.selectedNodePath)
                     previewModel.update(snapshot: snapshot, path: model.selectedNodePath)
+
+                    loadAttributes()
+                }
+                .task(id: model.nodeIdString(model.selectedNodePath ?? appModel.debugNodePath)) {
+                    loadAttributes()
                 }
             } else {
                 ContentUnavailableView(
@@ -317,5 +328,92 @@ struct DebugTreeScreen: View {
     private func copyToPasteboard(_ text: String) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
+    }
+
+    private func loadAttributes() {
+        let path = model.selectedNodePath ?? appModel.debugNodePath
+        isLoadingAttributes = true
+        selectedAttributesError = nil
+
+        Task { @MainActor in
+            do {
+                let attributes = try appModel.accessibility.readAllAttributes(at: path)
+                selectedAttributes = attributes
+                    .map { ($0.key, $0.value) }
+                    .sorted { $0.0.localizedStandardCompare($1.0) == .orderedAscending }
+            } catch {
+                selectedAttributes = []
+                selectedAttributesError = error.localizedDescription
+            }
+
+            isLoadingAttributes = false
+        }
+    }
+
+    private func attributesSection(path: [Int]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                Text("Attributes")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
+
+                Spacer()
+
+                Text(model.displayPath(path))
+                    .font(.system(.caption2, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+
+            HStack(spacing: 10) {
+                TextField("Filter attributes (name/value)", text: $attributeQuery)
+                    .textFieldStyle(.roundedBorder)
+
+                if isLoadingAttributes {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+            }
+
+            if let selectedAttributesError {
+                Text(selectedAttributesError)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.red)
+            } else if selectedAttributes.isEmpty {
+                Text("No attributes found.")
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.secondary)
+            } else {
+                let filtered = filteredAttributes()
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(filtered, id: \.key) { row in
+                        HStack(alignment: .top, spacing: 10) {
+                            Text(row.key)
+                                .font(.system(.caption, design: .monospaced).weight(.semibold))
+                                .frame(width: 220, alignment: .leading)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+
+                            Text(row.value)
+                                .font(.system(.caption, design: .monospaced))
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func filteredAttributes() -> [(key: String, value: String)] {
+        let trimmed = attributeQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return selectedAttributes }
+
+        let needle = trimmed.lowercased()
+        return selectedAttributes.filter { row in
+            row.key.lowercased().contains(needle) || row.value.lowercased().contains(needle)
+        }
     }
 }
