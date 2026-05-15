@@ -43,6 +43,23 @@ private struct SpeechRecognitionCallbackEvent: Sendable {
     let errorDescription: String?
 }
 
+private final class SpeechSynthesizerDelegateProxy: NSObject, AVSpeechSynthesizerDelegate {
+    var onStart: ((AVSpeechUtterance) -> Void)?
+    var onComplete: ((AVSpeechUtterance) -> Void)?
+
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didStart utterance: AVSpeechUtterance) {
+        onStart?(utterance)
+    }
+
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        onComplete?(utterance)
+    }
+
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
+        onComplete?(utterance)
+    }
+}
+
 private func startSpeechRecognitionTask(
     recognizer: SFSpeechRecognizer,
     request: SFSpeechAudioBufferRecognitionRequest,
@@ -79,8 +96,29 @@ func requestMicrophoneAccess() async -> Bool {
 @MainActor
 final class VoiceAssistant {
     private let synthesizer = AVSpeechSynthesizer()
+    private let synthesizerDelegate = SpeechSynthesizerDelegateProxy()
     private var audioEngine: AVAudioEngine?
     private var recognitionTask: SFSpeechRecognitionTask?
+    private var speaking = false
+    private var pendingSpeechUtteranceCount = 0
+    private var speechUtteranceContinuations: [ObjectIdentifier: CheckedContinuation<Void, Never>] = [:]
+    private var speechCompletionWaiters: [CheckedContinuation<Void, Never>] = []
+
+    var onSpeakingStateChanged: ((Bool) -> Void)?
+
+    init() {
+        synthesizerDelegate.onStart = { [weak self] _ in
+            Task { @MainActor in
+                self?.setSpeaking(true)
+            }
+        }
+        synthesizerDelegate.onComplete = { [weak self] utterance in
+            Task { @MainActor in
+                self?.handleSpeechUtteranceCompleted(utterance)
+            }
+        }
+        synthesizer.delegate = synthesizerDelegate
+    }
 
     func speak(_ text: String, language: String = "pt-BR", voiceIdentifier: String? = nil, rate: Float = AVSpeechUtteranceDefaultSpeechRate) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -93,11 +131,60 @@ final class VoiceAssistant {
             utterance.voice = AVSpeechSynthesisVoice(language: language)
         }
         utterance.rate = min(max(rate, AVSpeechUtteranceMinimumSpeechRate), AVSpeechUtteranceMaximumSpeechRate)
-        synthesizer.speak(utterance)
+        pendingSpeechUtteranceCount += 1
+        setSpeaking(true)
+
+        await withCheckedContinuation { continuation in
+            speechUtteranceContinuations[ObjectIdentifier(utterance)] = continuation
+            synthesizer.speak(utterance)
+        }
     }
 
     func stopSpeaking(immediately: Bool = true) async {
         synthesizer.stopSpeaking(at: immediately ? .immediate : .word)
+        pendingSpeechUtteranceCount = 0
+        setSpeaking(false)
+        resumeSpeechUtteranceContinuations()
+        resumeSpeechCompletionWaiters()
+    }
+
+    private func handleSpeechUtteranceCompleted(_ utterance: AVSpeechUtterance) {
+        if pendingSpeechUtteranceCount > 0 {
+            pendingSpeechUtteranceCount -= 1
+        }
+
+        speechUtteranceContinuations.removeValue(forKey: ObjectIdentifier(utterance))?.resume()
+
+        if pendingSpeechUtteranceCount == 0 {
+            setSpeaking(false)
+            resumeSpeechCompletionWaiters()
+        }
+    }
+
+    private func setSpeaking(_ value: Bool) {
+        guard speaking != value else { return }
+        speaking = value
+        onSpeakingStateChanged?(value)
+    }
+
+    private func waitForSpeechSynthesisToFinish() async {
+        guard speaking || synthesizer.isSpeaking || pendingSpeechUtteranceCount > 0 else { return }
+
+        await withCheckedContinuation { continuation in
+            speechCompletionWaiters.append(continuation)
+        }
+    }
+
+    private func resumeSpeechUtteranceContinuations() {
+        let continuations = Array(speechUtteranceContinuations.values)
+        speechUtteranceContinuations.removeAll()
+        continuations.forEach { $0.resume() }
+    }
+
+    private func resumeSpeechCompletionWaiters() {
+        let waiters = speechCompletionWaiters
+        speechCompletionWaiters.removeAll()
+        waiters.forEach { $0.resume() }
     }
 
     func askUser(prompt: String, language: String = "pt-BR", voiceIdentifier: String? = nil, recognitionLocaleIdentifier: String = "pt-BR", timeoutSeconds: Int? = nil) async throws -> String {
@@ -106,6 +193,8 @@ final class VoiceAssistant {
     }
 
     func listen(recognitionLocaleIdentifier: String = "pt-BR", timeoutSeconds: Int? = nil) async throws -> String {
+        await waitForSpeechSynthesisToFinish()
+
         let normalizedTimeoutSeconds = timeoutSeconds.flatMap { value -> Int? in
             guard value > 0 else { return nil }
             return max(3, min(value, 120))
@@ -229,6 +318,8 @@ final class VoiceAssistant {
         recognitionLocaleIdentifier: String = "pt-BR",
         onPartial: @escaping @MainActor (String) -> Void
     ) async throws -> String {
+        await waitForSpeechSynthesisToFinish()
+
         let speechAuthorized = try await ensureSpeechAuthorization()
         guard speechAuthorized else {
             throw VoiceAssistantError.speechNotAuthorized

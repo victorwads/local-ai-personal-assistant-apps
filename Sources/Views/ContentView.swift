@@ -122,6 +122,13 @@ struct ContentView: View {
 
             Spacer()
 
+            SpeechStatusBadge(
+                isSpeaking: appModel.speechSynthesizerSpeaking,
+                onStop: {
+                    Task { await appModel.voiceAssistant.stopSpeaking() }
+                }
+            )
+
             PendingClientResponseBadge(
                 pendingCount: appModel.pendingClientAskCount,
                 onOpen: { selectedScreen = .clientVoice }

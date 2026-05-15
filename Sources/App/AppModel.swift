@@ -47,6 +47,7 @@ final class AppModel: ObservableObject {
     @Published var microphoneAuthorized = true
     @Published var speechRecognitionAuthorized = true
     @Published var handsFreeClientVoiceEnabled = true
+    @Published var speechSynthesizerSpeaking = false
 
     let accessibility = AccessibilityService()
     let accessibilityScheduler = AccessibilityActionScheduler()
@@ -72,6 +73,10 @@ final class AppModel: ObservableObject {
     private let handsFreeClientVoiceSettingsRepository = HandsFreeClientVoiceSettingsRepository.shared
 
     init(startupMode: StartupMode = .live) {
+        voiceAssistant.onSpeakingStateChanged = { [weak self] isSpeaking in
+            self?.speechSynthesizerSpeaking = isSpeaking
+        }
+
         switch startupMode {
         case .live:
             loadConversationAccessSettings()
