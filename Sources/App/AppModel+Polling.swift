@@ -81,7 +81,8 @@ extension AppModel {
                 didUpdateSignatures = true
             }
 
-            let needsMessages = previousSignature == nil || signatureChanged
+            let isMissingCachedMessages = memoryStore.chatState(for: conversation.id) == nil
+            let needsMessages = isMissingCachedMessages || previousSignature == nil || signatureChanged
 
             guard needsMessages else {
                 continue

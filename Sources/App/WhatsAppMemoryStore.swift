@@ -24,6 +24,18 @@ final class WhatsAppMemoryStore: ObservableObject {
 
     private init() {}
 
+    func replaceAllChatStates(_ chatStatesById: [String: ChatState]) {
+        self.chatStatesById = chatStatesById
+
+        if let selectedConversationId, let cached = chatStatesById[selectedConversationId] {
+            selectedChatState = cached
+        }
+    }
+
+    func snapshotChatStatesById() -> [String: ChatState] {
+        chatStatesById
+    }
+
     func replaceConversations(_ conversations: [ConversationSummary]) {
         self.conversations = conversations
         let validIDs = Set(conversations.map(\.id))

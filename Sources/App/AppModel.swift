@@ -70,7 +70,10 @@ final class AppModel: ObservableObject {
     let memoriesRepository = MemoriesRepository.shared
     let subjectsRepository = SubjectsRepository.shared
     let clientVoiceEventsRepository = ClientVoiceEventsRepository.shared
+    let chatHistoryRepository = ChatHistoryRepository.shared
     private let handsFreeClientVoiceSettingsRepository = HandsFreeClientVoiceSettingsRepository.shared
+    var chatHistoryListenerId: UUID?
+    var chatHistoryPersistTask: Task<Void, Never>?
 
     init(startupMode: StartupMode = .live) {
         voiceAssistant.onSpeakingStateChanged = { [weak self] isSpeaking in
@@ -86,7 +89,9 @@ final class AppModel: ObservableObject {
             loadExperimentalInputLockSetting()
             loadMCPSendMessagePrefixSetting()
             loadChatListSignatures()
+            loadChatHistory()
             bindMemoryStore()
+            bindChatHistoryPersistence()
             configureMCPConnector()
             refreshMicrophoneAuthorization()
             refreshSpeechRecognitionAuthorization()

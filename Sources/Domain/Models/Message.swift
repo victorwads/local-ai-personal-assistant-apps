@@ -1,12 +1,12 @@
 import Foundation
 
-enum MessageDirection: String, Equatable {
+enum MessageDirection: String, Codable, Equatable {
     case incoming
     case outgoing
     case unknown
 }
 
-enum MessageKind: String, Equatable {
+enum MessageKind: String, Codable, Equatable {
     case text
     case voice
     case image
@@ -15,14 +15,14 @@ enum MessageKind: String, Equatable {
     case unknown
 }
 
-enum MessageStatus: String, Equatable {
+enum MessageStatus: String, Codable, Equatable {
     case sent
     case delivered
     case read
     case unknown
 }
 
-struct Message: Identifiable, Equatable {
+struct Message: Identifiable, Codable, Equatable {
     let id: String
     let chatId: String
     let direction: MessageDirection

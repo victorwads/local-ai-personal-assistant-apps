@@ -10,6 +10,7 @@ extension AppModel {
         memoryStore.resetAll()
         listSignaturesById = [:]
         persistChatListSignatures()
+        chatHistoryRepository.clear()
     }
 
     func bindMemoryStore() {

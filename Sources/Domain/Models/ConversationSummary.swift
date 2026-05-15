@@ -1,6 +1,6 @@
 import Foundation
 
-struct ConversationSummary: Identifiable, Equatable {
+struct ConversationSummary: Identifiable, Codable, Equatable {
     let id: String
     let accessibilityPath: [Int]
     let name: String

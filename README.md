@@ -54,7 +54,7 @@ This repo currently contains a generated Xcode project for a macOS SwiftUI app w
 - `Sources/App/AppModel+Polling.swift`: polling loop and refresh logic
 - `Sources/App/AppModel+Messaging.swift`: send-message flow and enqueue semantics
 - `Sources/App/AppModel+MCP.swift`: MCP JSON-RPC request handling and tool definitions
-- `Sources/App/WhatsAppMemoryStore.swift`: in-memory chat state and wait-for-message support
+- `Sources/App/WhatsAppMemoryStore.swift`: chat state and wait-for-message support (rehydrated from persisted cache on startup)
 - `Sources/WhatsAppBridge/Interaction/WhatsAppInteractor.swift`: selecting conversations and sending messages in WhatsApp
 - `Sources/WhatsAppBridge/Parsing/WhatsAppAccessibilityMap.swift`: heuristics for locating WhatsApp AX nodes
 - `Sources/WhatsAppBridge/Accessibility/AccessibilityService.swift`: low-level AX and keyboard event interactions
@@ -118,6 +118,11 @@ get_recent_messages(chatId, limit = 10)
 send_message(chatId, text)
 wait_for_message(chatId?, afterMessageId?, timeoutSeconds = 60)
 ```
+
+### Chat History Persistence
+
+By default the app persists the last parsed chat state (recent messages + per-chat UI state) to `UserDefaults` and restores it on restart.
+If a chat has no cached messages (fresh install, cache cleared, or decode failure), the polling loop will load messages from WhatsApp even if the chat list signature has not changed.
 
 The MCP server also accepts lightweight protocol messages such as `initialize`, `ping`, and `notifications/initialized` for integration compatibility.
 

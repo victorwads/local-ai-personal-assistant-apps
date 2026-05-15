@@ -1,6 +1,6 @@
 import Foundation
 
-struct ChatState: Equatable {
+struct ChatState: Codable, Equatable {
     let chat: ConversationSummary
     let messages: [Message]
     let composeFocused: Bool
