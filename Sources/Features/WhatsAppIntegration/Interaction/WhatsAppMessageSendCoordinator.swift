@@ -47,6 +47,10 @@ final class WhatsAppMessageSendCoordinator {
     }
 
     func sendMessageViaScheduler(_ text: String, to conversationId: String) async throws {
+        try await sendMessagesViaScheduler([text], to: conversationId)
+    }
+
+    func sendMessagesViaScheduler(_ texts: [String], to conversationId: String) async throws {
         await accessibilityScheduler.cancelAll { $0 == .background }
 
         let resumePollingAfterSend = isPolling()
@@ -69,7 +73,7 @@ final class WhatsAppMessageSendCoordinator {
 
                 await self.accessibilityScheduler.enqueue(priority: .critical) {
                     do {
-                        try await self.sendMessage(text, to: conversationId)
+                        try await self.sendMessages(texts, to: conversationId)
                         continuation.resume(returning: ())
                     } catch {
                         continuation.resume(throwing: error)
@@ -80,6 +84,10 @@ final class WhatsAppMessageSendCoordinator {
     }
 
     func sendMessage(_ text: String, to conversationId: String) async throws {
+        try await sendMessages([text], to: conversationId)
+    }
+
+    func sendMessages(_ texts: [String], to conversationId: String) async throws {
         guard let conversation = resolveConversation(conversationId) else {
             throw MCPServerError.invalidParameter("chatId")
         }
@@ -88,9 +96,11 @@ final class WhatsAppMessageSendCoordinator {
             throw MCPServerError.invalidRequest
         }
 
-        let trimmedMessage = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedMessage.isEmpty else {
-            throw MCPServerError.invalidParameter("text")
+        let trimmedMessages = texts
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        guard !trimmedMessages.isEmpty else {
+            throw MCPServerError.invalidParameter("messages")
         }
 
         let shouldLockInput = inputLockSettings.isEnabled
@@ -112,8 +122,10 @@ final class WhatsAppMessageSendCoordinator {
 
         updateSelectedChatState(screenState, conversation)
 
-        appendLog("Sending message to \(conversation.name)…", .info)
-        try interactor.sendMessage(trimmedMessage, using: accessibility)
-        appendLog("Sent message to \(conversation.name).", .info)
+        appendLog("Sending \(trimmedMessages.count) message(s) to \(conversation.name)…", .info)
+        for message in trimmedMessages {
+            try interactor.sendMessage(message, using: accessibility)
+        }
+        appendLog("Sent \(trimmedMessages.count) message(s) to \(conversation.name).", .info)
     }
 }

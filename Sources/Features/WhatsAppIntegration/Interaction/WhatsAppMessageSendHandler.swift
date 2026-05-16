@@ -25,40 +25,53 @@ struct WhatsAppMessageSendHandler {
     }
 
     func sendMessage(_ text: String, using accessibility: AccessibilityService) throws {
-        let liveSnapshot = try accessibility.captureWhatsAppSnapshot(maxDepth: 14)
-        guard let composeContainerPath = accessibilityMap.composeContainer(in: liveSnapshot.rootNode)?.accessibilityPath else {
-            throw AccessibilityError.nodeNotFound
+        // Fast path: this container path is stable in WhatsApp Desktop and avoids a full AX snapshot per message.
+        var composeContainerPath: [Int] = [0, 0, 0, 4, 1]
+        if (try? accessibility.readComposeValue(in: composeContainerPath)) == nil {
+            let liveSnapshot = try accessibility.captureWhatsAppSnapshot(maxDepth: 14)
+            guard let resolved = accessibilityMap.composeContainer(in: liveSnapshot.rootNode)?.accessibilityPath else {
+                throw AccessibilityError.nodeNotFound
+            }
+            composeContainerPath = resolved
         }
 
-        let normalizedTarget = normalizeComposeTextForComparison(text)
-        var typedOK = false
-        for attempt in 1...3 {
-            try accessibility.sendText(text, inComposeContainer: composeContainerPath)
+        try accessibility.sendText(text, inComposeContainer: composeContainerPath)
 
-            var lastSeen: String?
-            for _ in 0..<100 {
-                let current = (try? accessibility.readComposeValue(in: composeContainerPath)).map(normalizeComposeTextForComparison(_:)) ?? ""
-                if composeLooksLikeTarget(current, target: normalizedTarget) {
-                    typedOK = true
+        // Lightweight pre-send check: ensure the compose field is not empty before pressing Enter.
+        // (We cleared it right before typing, so non-empty is a good "text landed" signal.)
+        var hasText = false
+        for attempt in 1...2 {
+            for _ in 0..<75 { // ~1.5s
+                let current = normalizeComposeTextForComparison((try? accessibility.readComposeValue(in: composeContainerPath)) ?? "")
+                if !current.isEmpty {
+                    hasText = true
                     break
-                }
-                if current != lastSeen {
-                    lastSeen = current
                 }
                 Thread.sleep(forTimeInterval: 0.02)
             }
 
-            if typedOK { break }
-            if attempt < 3 {
-                continue
+            if hasText { break }
+            if attempt < 2 {
+                try accessibility.sendText(text, inComposeContainer: composeContainerPath)
             }
         }
-
-        if !typedOK {
-            throw AccessibilityError.actionFailed(-3)
-        }
+        if !hasText { throw AccessibilityError.actionFailed(-3) }
 
         try triggerSend(using: accessibility, composeContainerPath: composeContainerPath)
+
+        // Post-send validation: WhatsApp clears the compose field after a successful send.
+        var cleared = false
+        for _ in 0..<75 { // ~1.5s
+            let current = normalizeComposeTextForComparison((try? accessibility.readComposeValue(in: composeContainerPath)) ?? "")
+            if current.isEmpty {
+                cleared = true
+                break
+            }
+            Thread.sleep(forTimeInterval: 0.02)
+        }
+        if !cleared {
+            throw AccessibilityError.actionFailed(-4)
+        }
     }
 
     private func triggerSend(using accessibility: AccessibilityService, composeContainerPath: [Int]) throws {

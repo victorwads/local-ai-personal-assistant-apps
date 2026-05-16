@@ -14,6 +14,7 @@ protocol MCPServerRuntimeProviding {
     func submitClientPrompt(_ text: String) async
     func consumeClientPrompt() async -> String?
     func sendMessageViaScheduler(_ text: String, to conversationId: String) async throws
+    func sendMessagesViaScheduler(_ texts: [String], to conversationId: String) async throws
     func ensureChatLoaded(chatId: String, reason: String) async
     func isBlocked(_ conversationName: String) -> Bool
     func appendLog(_ message: String, level: LogLevel)

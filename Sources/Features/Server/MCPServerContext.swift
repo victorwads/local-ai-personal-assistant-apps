@@ -64,6 +64,10 @@ extension MCPServerContext {
         try await runtime.sendMessageViaScheduler(text, to: conversationId)
     }
 
+    func sendMessagesViaScheduler(_ texts: [String], _ conversationId: String) async throws {
+        try await runtime.sendMessagesViaScheduler(texts, to: conversationId)
+    }
+
     func ensureChatLoaded(_ chatId: String, _ reason: String) async {
         await runtime.ensureChatLoaded(chatId: chatId, reason: reason)
     }
