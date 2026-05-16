@@ -10,6 +10,7 @@ struct DebugTreeScreen: View {
     @StateObject private var model = DebugTreeViewModel()
     @StateObject private var previewModel = DebugTreePreviewModel()
     @State private var attributeQuery = ""
+    @State private var captureNameDraft = ""
     @State private var selectedAttributes: [(key: String, value: String)] = []
     @State private var selectedAttributesError: String?
     @State private var isLoadingAttributes = false
@@ -115,6 +116,17 @@ struct DebugTreeScreen: View {
                 Label("Copy Selected Path", systemImage: "doc.on.doc")
             }
             .disabled(model.selectedNodePath == nil)
+
+            TextField("Capture name", text: $captureNameDraft)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 180)
+
+            Button {
+                appModel.saveDebugSnapshot(named: captureNameDraft)
+            } label: {
+                Label("Save Capture", systemImage: "square.and.arrow.down")
+            }
+            .disabled(appModel.debugSnapshot == nil)
 
             Spacer()
 

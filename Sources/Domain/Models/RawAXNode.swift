@@ -97,4 +97,54 @@ struct RawAXNode: Identifiable, Equatable {
         let childLines = children.map { $0.prettyDescription(depth: depth + 1) }
         return ([indent + line] + childLines).joined(separator: "\n")
     }
+
+    func yamlDescription(depth: Int = 0) -> String {
+        yamlDescription(depth: depth, isListItem: false)
+    }
+
+    private func yamlDescription(depth: Int, isListItem: Bool) -> String {
+        let indent = String(repeating: "  ", count: depth)
+        let contentIndent = indent + (isListItem ? "  " : "")
+        let nodePrefix = isListItem ? "\(indent)- " : contentIndent
+        var lines: [String] = []
+
+        lines.append("\(nodePrefix)path: \(yamlScalar(accessibilityPath.isEmpty ? "root" : accessibilityPath.map(String.init).joined(separator: ".")))")
+        lines.append("\(contentIndent)role: \(yamlScalar(role))")
+        lines.append("\(contentIndent)subrole: \(yamlScalar(subrole))")
+        lines.append("\(contentIndent)title: \(yamlScalar(title))")
+        lines.append("\(contentIndent)description: \(yamlScalar(nodeDescription))")
+        lines.append("\(contentIndent)help: \(yamlScalar(help))")
+        lines.append("\(contentIndent)value: \(yamlScalar(stringValue))")
+
+        if let frame {
+            lines.append("\(contentIndent)frame:")
+            let frameIndent = contentIndent + "  "
+            lines.append("\(frameIndent)x: \(Int(frame.origin.x))")
+            lines.append("\(frameIndent)y: \(Int(frame.origin.y))")
+            lines.append("\(frameIndent)width: \(Int(frame.width))")
+            lines.append("\(frameIndent)height: \(Int(frame.height))")
+        } else {
+            lines.append("\(contentIndent)frame: null")
+        }
+
+        if children.isEmpty {
+            lines.append("\(contentIndent)children: []")
+        } else {
+            lines.append("\(contentIndent)children:")
+            for child in children {
+                lines.append(child.yamlDescription(depth: depth + 1, isListItem: true))
+            }
+        }
+
+        return lines.joined(separator: "\n")
+    }
+
+    private func yamlScalar(_ value: String?) -> String {
+        guard let value else { return "null" }
+        let escaped = value
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+            .replacingOccurrences(of: "\n", with: "\\n")
+        return "\"\(escaped)\""
+    }
 }
