@@ -3,6 +3,7 @@ import Foundation
 @MainActor
 enum MCPServerToolRegistry {
     static let tools: [any MCPToolHandler.Type] = [
+        GetAssistantNameTool.self,
         ListChatsTool.self,
         ListUnreadChatsTool.self,
         ListChatsBySearchTool.self,

@@ -2,6 +2,7 @@ import Foundation
 
 @MainActor
 protocol MCPServerRuntimeProviding {
+    func assistantName() -> String
     func speechLanguage() -> String
     func speechVoiceIdentifier() -> String?
     func speechRate() -> Float

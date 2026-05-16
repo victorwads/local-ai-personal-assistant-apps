@@ -9,6 +9,10 @@ final class AppModelMCPRuntimeAdapter: MCPServerRuntimeProviding {
         self.appModel = appModel
     }
 
+    func assistantName() -> String {
+        appModel?.assistantNameForMCP() ?? ""
+    }
+
     func speechLanguage() -> String {
         appModel?.voiceSettings.speechLanguage ?? "pt-BR"
     }

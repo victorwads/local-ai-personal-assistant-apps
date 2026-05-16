@@ -20,8 +20,11 @@ final class MCPSendPrefixSettingsModel: ObservableObject {
         bindPersistence()
     }
 
+    var assistantName: String {
+        sendMessagePrefix.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     func applyPrefixIfNeeded(_ text: String) -> String {
-        let assistantName = sendMessagePrefix.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !assistantName.isEmpty else { return text }
         return "\(assistantName):\n\(text)"
     }
