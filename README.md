@@ -86,7 +86,6 @@ The server currently registers these tools:
 
 ### WhatsApp chat tools
 
-- `get_assistant_name`
 - `list_chats`
 - `list_unread_chats`
 - `list_chats_by_search`
@@ -94,6 +93,11 @@ The server currently registers these tools:
 - `send_message`
 - `wait_for_chat_message`
 - `wait_for_event`
+
+### Utility tools
+
+- `get_assistant_name`
+- `get_current_date`
 
 ### Client voice tools
 
