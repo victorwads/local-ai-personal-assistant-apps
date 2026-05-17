@@ -190,9 +190,10 @@ final class AppModel: ObservableObject {
     private func bindFeatureSettings() {
         voiceSettings.$experimentalSpeakApiEnabled
             .dropFirst()
+            .receive(on: RunLoop.main)
             .sink { [weak self] enabled in
-                guard let self else { return }
-                Task {
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
                     await self.voiceAssistant.setExperimentalSpeakEnabled(enabled)
                 }
             }
@@ -200,16 +201,18 @@ final class AppModel: ObservableObject {
 
         handsFreeClientVoiceSettings.$isEnabled
             .dropFirst()
+            .receive(on: RunLoop.main)
             .sink { [weak self] _ in
-                Task { [weak self] in
+                Task { @MainActor [weak self] in
                     await self?.maybeShowHandsFreeClientVoiceWindow()
                 }
             }
             .store(in: &cancellables)
 
         NotificationCenter.default.publisher(for: .clientVoiceEventsRepositoryDidChange)
+            .receive(on: RunLoop.main)
             .sink { [weak self] _ in
-                Task { [weak self] in
+                Task { @MainActor [weak self] in
                     await self?.refreshPendingClientAskCount()
                 }
             }
