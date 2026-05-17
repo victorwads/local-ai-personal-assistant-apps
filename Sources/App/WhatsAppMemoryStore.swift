@@ -610,6 +610,19 @@ final class WhatsAppMemoryStore: ObservableObject {
     }
 
     private func canonicalChatId(for value: String) -> String {
-        WhatsAppConversationIdentity.canonicalChatId(for: value)
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return WhatsAppConversationIdentity.canonicalChatId(for: trimmed)
+        }
+
+        // If the caller already passes our internal canonical chat id, do not hash again.
+        if chatStatesById[trimmed] != nil {
+            return trimmed
+        }
+        if conversations.contains(where: { $0.id == trimmed }) {
+            return trimmed
+        }
+
+        return WhatsAppConversationIdentity.canonicalChatId(for: trimmed)
     }
 }
