@@ -23,6 +23,14 @@ Quando a conversa não estiver visível na lista principal do app, o agente deve
 **Descrição**  
 Adicionar a capacidade de arquivar uma conversa específica para manter o conjunto de chats ativos mais enxuto e organizado. O comportamento padrão do WhatsApp de reabrir o chat quando chegam mensagens novas continua valendo.
 
+**Evidências/seletores observados na row**  
+- `data-testid="list-item-0"` identifica a linha da conversa.
+- `data-testid="cell-frame-container"`, `data-testid="cell-frame-title"` e `data-testid="cell-frame-primary-detail"` organizam a estrutura visual da row.
+- `data-testid="last-msg-status"` expõe o preview/status da última mensagem.
+- `data-testid="status-dblcheck"` indica o estado de entrega/leitura do último envio.
+- `aria-label="Conversa fixada"` mostra que há ao menos um estado de pin visível nessa row.
+- Neste trecho específico ainda não apareceu o menu ou botão de arquivar; isso precisa ser encontrado em outro nível da UI ou em outro estado do DOM.
+
 **Por que isso entra no backlog**  
 É uma melhoria útil para controle de contexto e limpeza da lista de conversas, com uma implementação relativamente direta em comparação com o fluxo de busca/resolução de chat.
 
@@ -58,6 +66,77 @@ Externalizar os seletores e IDs usados no parse do WhatsApp Web para um arquivo 
 
 **Por que isso entra no backlog**  
 Isso reduz o acoplamento com o HTML atual do WhatsApp Web e facilita manter o app funcionando quando a interface mudar, sem precisar lançar uma nova versão para toda alteração pequena de seletor.
+
+---
+
+## 5) `lastMessageAt` estruturado e ordenação por última mensagem
+
+**Descrição**  
+Investigar onde o WhatsApp Web expõe a data/hora real da última mensagem em formato estruturado, em vez de depender apenas de texto legível como `quinta-feira` ou `14:50`. O objetivo é mapear esse valor para algo ordenável, preferencialmente `ISO string`, e usar isso tanto na listagem visual quanto no repositório/ordenação interna.
+
+**Contexto observado**  
+- No exemplo atual, a row expõe `lastMessageAtText`, `lastMessageDirection`, `lastMessagePreview` e `lastMessageStatus`, mas não mostra um timestamp estruturado.
+- O texto exibido pode servir para UI, mas não é confiável para ordenação consistente.
+- Se o HTML ou metadado interno trouxer um timestamp em `ISO`, esse campo deve ser o candidato principal para armazenar e ordenar.
+
+**Por que isso entra no backlog**  
+Isso melhora a ordenação dos chats e evita depender de texto humano para decidir recência. Como `ISO string` ordena bem lexicograficamente, ela também simplifica a lógica de sorting.
+
+---
+
+## 6) Exposição externa para app mobile e controle por API
+
+**Descrição**  
+Externalizar parte da experiência do assistente para uma aplicação mobile ou outra interface cliente, permitindo que o usuário controle a máquina que roda o MCP server e o assistente de forma remota. A ideia é que tanto o fluxo de falar com o cliente quanto o fluxo do cliente responder possam ser acessados por essa camada externa.
+
+**Capacidades desejadas**  
+- Expor uma API para integração com app mobile ou outro cliente externo.
+- Permitir iniciar, acompanhar e controlar interações sem depender só da máquina local.
+- Suportar envio e recebimento de áudio, incluindo gravação e reprodução no dispositivo remoto quando fizer sentido.
+- Permitir reconhecimento de voz no lado do cliente, com possibilidade de usar recursos nativos do iPhone/Android ou um backend como `Whisper`.
+- Manter a máquina principal como origem do contexto, mas com interface externa para operação e resposta.
+
+**Por que isso entra no backlog**  
+Isso amplia o alcance do assistente para fora da máquina local e abre caminho para uma experiência mais portátil, principalmente para controlar conversas e áudios pelo celular.
+
+---
+
+## 7) Corrigir ordenação e metadados da lista de chats
+
+**Descrição**  
+Corrigir o bug em que a listagem de chats fica desordenada quando o WhatsApp Web retorna apenas textos como `quinta-feira` ou horários soltos em vez de uma data completa da última mensagem. Hoje, a integração parece não expor um timestamp estruturado no HTML, então a ordenação por idade fica inconsistente e não confiável.
+
+**Problema observado**  
+- Em `list chats`, o campo da última mensagem às vezes aparece só como texto humano, sem `ISO date`.
+- Quando a última mensagem não traz data completa, a ordenação quebra ou fica parcial.
+- Alguns metadados da última mensagem ainda precisam ser recuperados corretamente, incluindo o status da última mensagem.
+- A versão nativa já parecia tratar melhor esses dados, mas no Web isso ainda não está estável.
+
+**Objetivo**  
+- Encontrar a origem correta da data da última mensagem, se ela existir em algum metadado interno do WhatsApp Web.
+- Usar essa data estruturada para ordenar os chats no repositório e na listagem visual.
+- Garantir que o status da última mensagem também seja preenchido corretamente.
+
+**Por que isso entra no backlog**  
+Sem uma data real e estruturada, a lista não consegue ser ordenada por recência com confiança, o que afeta diretamente a experiência e a leitura operacional dos chats.
+
+---
+
+## 8) `wait for event` não pode consumir pendências
+
+**Descrição**  
+Corrigir o bug em que o `wait for event` está marcando como resolvidas ou “handled” conversas que ainda não tiveram suas mensagens lidas pelo fluxo correto. Hoje ele lista chats com conversa pendente, mas se for chamado de novo sem passar por `list recent messages`, ele já zera o estado e faz o sistema perder pendências.
+
+**Regra desejada**  
+- `wait for event` apenas informa quais chats têm pendência.
+- Somente `list recent messages` pode marcar mensagens como `handled` para um chat específico.
+- Se `list recent messages` não for chamado, o mesmo chat precisa continuar aparecendo como pendente no próximo `wait for event`.
+- A limpeza de lido/handled deve ocorrer apenas depois do pull real das mensagens do chat.
+- A resposta do `wait for event` precisa trazer o nome do evento, como `prompt_from_cliente` ou `unhandled_chat`, e não apenas um tipo genérico como `chat_messages`.
+- O payload do evento deve ser explícito o suficiente para distinguir o que aconteceu sem depender de inferência externa.
+
+**Por que isso entra no backlog**  
+Esse bug quebra o fluxo de consumo do assistente e faz perder mensagens antes da leitura real, então a responsabilidade de “consumir” precisa ficar restrita ao endpoint certo.
 
 ---
 
