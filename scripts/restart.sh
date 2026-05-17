@@ -22,6 +22,21 @@ fi
 TEAM_ID="${TEAM_ID:-$DEFAULT_DEVELOPMENT_TEAM}"
 CODE_SIGN_IDENTITY="${CODE_SIGN_IDENTITY:-$DEFAULT_CODE_SIGN_IDENTITY}"
 
+echo "Generating Xcode project..."
+cd "$REPO_DIR"
+xcodegen generate
+
+echo "Building $SCHEME..."
+xcodebuild \
+  -project "$PROJECT_FILE" \
+  -scheme "$SCHEME" \
+  -configuration Debug \
+  -derivedDataPath "$DERIVED_DATA_DIR" \
+  CODE_SIGN_STYLE=Automatic \
+  DEVELOPMENT_TEAM="$TEAM_ID" \
+  CODE_SIGN_IDENTITY="$CODE_SIGN_IDENTITY" \
+  build
+
 echo "Closing running AssistantMCPServer instances..."
 osascript -e 'tell application "AssistantMCPServer" to quit' >/dev/null 2>&1 || true
 pkill -x AssistantMCPServer 2>/dev/null || true
@@ -41,21 +56,6 @@ while pgrep -x AssistantMCPServer >/dev/null 2>&1; do
   fi
   sleep 1
 done
-
-echo "Generating Xcode project..."
-cd "$REPO_DIR"
-xcodegen generate
-
-echo "Building $SCHEME..."
-xcodebuild \
-  -project "$PROJECT_FILE" \
-  -scheme "$SCHEME" \
-  -configuration Debug \
-  -derivedDataPath "$DERIVED_DATA_DIR" \
-  CODE_SIGN_STYLE=Automatic \
-  DEVELOPMENT_TEAM="$TEAM_ID" \
-  CODE_SIGN_IDENTITY="$CODE_SIGN_IDENTITY" \
-  build
 
 echo "Opening built app..."
 open -n "$APP_PATH"
