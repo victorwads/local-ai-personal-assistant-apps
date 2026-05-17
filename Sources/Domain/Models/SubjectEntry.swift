@@ -58,6 +58,23 @@ struct SubjectEntry: Codable, Identifiable, Equatable {
     var updatedAt: Date
 }
 
+extension SubjectEntry {
+    var terminalReason: String? {
+        let prefixes = [
+            "Subject resolved. Reason: ",
+            "Subject canceled. Reason: "
+        ]
+
+        for event in eventLog.reversed() {
+            for prefix in prefixes where event.description.hasPrefix(prefix) {
+                let reason = String(event.description.dropFirst(prefix.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+                return reason.isEmpty ? nil : reason
+            }
+        }
+        return nil
+    }
+}
+
 struct EventEntry: Codable, Equatable {
     let id: UUID
     let timestamp: Date

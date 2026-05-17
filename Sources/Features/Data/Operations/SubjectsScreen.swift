@@ -68,6 +68,13 @@ struct SubjectsScreen: View {
                                 .lineLimit(2)
                         }
 
+                        if entry.status != .active, let reason = entry.terminalReason {
+                            Text("Reason: \(reason)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(3)
+                        }
+
                         if !entry.eventLog.isEmpty {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(
@@ -88,6 +95,13 @@ struct SubjectsScreen: View {
                             }
                         }
 
+                        if !entry.participants.isEmpty {
+                            Text("Participants: \(entry.participants.joined(separator: ", "))")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+                        }
+
                         HStack(spacing: 10) {
                             Text(entry.status.displayName)
                                 .font(.caption.monospaced())
@@ -102,6 +116,13 @@ struct SubjectsScreen: View {
                                     .font(.caption.monospaced())
                                     .foregroundStyle(.secondary)
                                     .help(chatId)
+                            }
+
+                            if let afterMessageId = entry.whatsappAfterMessageId, !afterMessageId.isEmpty {
+                                Text("After")
+                                    .font(.caption.monospaced())
+                                    .foregroundStyle(.secondary)
+                                    .help(afterMessageId)
                             }
 
                             if let threadId = entry.gmailThreadId, !threadId.isEmpty {
