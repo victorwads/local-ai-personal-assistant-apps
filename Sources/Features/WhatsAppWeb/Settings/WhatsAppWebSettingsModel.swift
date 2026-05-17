@@ -7,12 +7,14 @@ final class WhatsAppWebSettingsModel: ObservableObject {
     static let defaultInspectable = true
     static let defaultBridgePollingEnabled = true
     static let defaultBridgePollingIntervalSeconds = 5.0
+    static let defaultMessageSettleDelayMilliseconds = 800.0
     static let defaultPageZoom = 0.85
 
     @Published var customUserAgent: String
     @Published var isInspectable: Bool
     @Published var bridgePollingEnabled: Bool
     @Published var bridgePollingIntervalSeconds: Double
+    @Published var messageSettleDelayMilliseconds: Double
     @Published var pageZoom: Double
 
     private let repository: WhatsAppWebSettingsRepository
@@ -27,6 +29,7 @@ final class WhatsAppWebSettingsModel: ObservableObject {
         isInspectable = Self.defaultInspectable
         bridgePollingEnabled = Self.defaultBridgePollingEnabled
         bridgePollingIntervalSeconds = Self.defaultBridgePollingIntervalSeconds
+        messageSettleDelayMilliseconds = Self.defaultMessageSettleDelayMilliseconds
         pageZoom = Self.defaultPageZoom
 
         guard loadPersistedValues else { return }
@@ -44,6 +47,7 @@ final class WhatsAppWebSettingsModel: ObservableObject {
         isInspectable = Self.defaultInspectable
         bridgePollingEnabled = Self.defaultBridgePollingEnabled
         bridgePollingIntervalSeconds = Self.defaultBridgePollingIntervalSeconds
+        messageSettleDelayMilliseconds = Self.defaultMessageSettleDelayMilliseconds
         pageZoom = Self.defaultPageZoom
     }
 
@@ -52,6 +56,7 @@ final class WhatsAppWebSettingsModel: ObservableObject {
         isInspectable = repository.loadInspectable(defaultValue: Self.defaultInspectable)
         bridgePollingEnabled = repository.loadBridgePollingEnabled(defaultValue: Self.defaultBridgePollingEnabled)
         bridgePollingIntervalSeconds = repository.loadBridgePollingInterval(defaultValue: Self.defaultBridgePollingIntervalSeconds)
+        messageSettleDelayMilliseconds = repository.loadMessageSettleDelay(defaultValue: Self.defaultMessageSettleDelayMilliseconds)
         pageZoom = repository.loadPageZoom(defaultValue: Self.defaultPageZoom)
     }
 
@@ -84,6 +89,13 @@ final class WhatsAppWebSettingsModel: ObservableObject {
             }
             .store(in: &cancellables)
 
+        $messageSettleDelayMilliseconds
+            .dropFirst()
+            .sink { [weak self] _ in
+                self?.persistStoredValue()
+            }
+            .store(in: &cancellables)
+
         $pageZoom
             .dropFirst()
             .sink { [weak self] _ in
@@ -97,6 +109,7 @@ final class WhatsAppWebSettingsModel: ObservableObject {
         repository.saveInspectable(isInspectable)
         repository.saveBridgePollingEnabled(bridgePollingEnabled)
         repository.saveBridgePollingInterval(bridgePollingIntervalSeconds)
+        repository.saveMessageSettleDelay(messageSettleDelayMilliseconds)
         repository.savePageZoom(pageZoom)
     }
 }

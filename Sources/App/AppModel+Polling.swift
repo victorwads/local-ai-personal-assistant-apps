@@ -14,7 +14,8 @@ extension AppModel {
                 accountId: accountId,
                 accounts: { [weak self] in self?.whatsAppWebAccounts ?? [] },
                 sessionStore: whatsAppWebSessionStore,
-                bridge: whatsAppWebBridge
+                bridge: whatsAppWebBridge,
+                messageSettleDelayMilliseconds: whatsAppWebSettings.messageSettleDelayMilliseconds
             )
             await whatsAppPollingOrchestrator.refresh(provider: provider, messageLimit: 50)
             lastRefreshDescription = "Web refreshed at \(Date().formatted(date: .omitted, time: .standard))"

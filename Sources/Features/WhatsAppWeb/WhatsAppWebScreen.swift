@@ -42,6 +42,14 @@ struct WhatsAppWebScreen: View {
 
                     Button {
                         Task {
+                            await appModel.forceUpdateSelectedWhatsAppWebChat(for: account)
+                        }
+                    } label: {
+                        Label("Update This Chat", systemImage: "arrow.triangle.2.circlepath")
+                    }
+
+                    Button {
+                        Task {
                             let trimmedName = captureNameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
                             await appModel.captureAndSaveWhatsAppWebSnapshot(for: account, named: trimmedName.isEmpty ? nil : trimmedName)
                             captureNameDraft = ""

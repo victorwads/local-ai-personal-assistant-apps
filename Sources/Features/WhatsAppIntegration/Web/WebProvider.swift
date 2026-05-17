@@ -12,9 +12,16 @@ final class WebProvider: WhatsAppIntegrationProvider {
         accountId: UUID,
         accounts: @escaping () -> [WhatsAppWebAccount],
         sessionStore: WhatsAppWebSessionStore,
-        bridge: WhatsAppWebBridge
+        bridge: WhatsAppWebBridge,
+        messageSettleDelayMilliseconds: Double
     ) {
-        self.parser = WebParser(accountId: accountId, accounts: accounts, sessionStore: sessionStore, bridge: bridge)
+        self.parser = WebParser(
+            accountId: accountId,
+            accounts: accounts,
+            sessionStore: sessionStore,
+            bridge: bridge,
+            messageSettleDelayMilliseconds: messageSettleDelayMilliseconds
+        )
         self.interactor = WebInteractor(accountId: accountId, accounts: accounts, sessionStore: sessionStore, bridge: bridge)
     }
 }
@@ -25,6 +32,7 @@ private struct WebParser: WhatsAppConversationParser {
     let accounts: () -> [WhatsAppWebAccount]
     let sessionStore: WhatsAppWebSessionStore
     let bridge: WhatsAppWebBridge
+    let messageSettleDelayMilliseconds: Double
 
     func listConversations() async throws -> [ConversationSummary] {
         guard let account = accounts().first(where: { $0.id == accountId }) else {
@@ -55,7 +63,7 @@ private struct WebParser: WhatsAppConversationParser {
             return (nil, [], false, false)
         }
         let webView = sessionStore.webView(for: account)
-        let capture = try await bridge.captureSelectedChat(from: webView, limit: limit)
+        let capture = try await captureSettledSelectedChat(from: webView, limit: limit)
 
         let title = capture.selectedChatTitle
         let chatId = title.map { "web:\(accountId.uuidString):\($0)" } ?? "web:\(accountId.uuidString):unknown"
@@ -92,6 +100,24 @@ private struct WebParser: WhatsAppConversationParser {
         }
 
         return (title, messages, capture.flow == .chatSelected, capture.flow == .chatSelected)
+    }
+
+    private func captureSettledSelectedChat(from webView: WKWebView, limit: Int) async throws -> WhatsAppWebChatCapture {
+        let first = try await bridge.captureSelectedChat(from: webView, limit: limit)
+
+        // WA Web often finishes populating the message list shortly after the chat header flips.
+        // A short settle wait helps avoid returning a partial tail of messages.
+        let settleDelay = max(0, Int(messageSettleDelayMilliseconds.rounded()))
+        if settleDelay > 0 {
+            try await Task.sleep(for: .milliseconds(settleDelay))
+        }
+
+        let second = try await bridge.captureSelectedChat(from: webView, limit: limit)
+        if second.messages.count > first.messages.count {
+            return second
+        }
+
+        return first
     }
 }
 

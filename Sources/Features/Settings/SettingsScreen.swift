@@ -205,6 +205,26 @@ struct SettingsScreen: View {
 
                         VStack(alignment: .leading, spacing: 8) {
                             HStack {
+                                Text("Message settle delay")
+                                Spacer()
+                                Stepper(
+                                    value: $whatsAppWebSettings.messageSettleDelayMilliseconds,
+                                    in: 100...3000,
+                                    step: 50
+                                ) {
+                                    Text("\(Int(whatsAppWebSettings.messageSettleDelayMilliseconds))ms")
+                                        .monospacedDigit()
+                                }
+                                .frame(width: 140, alignment: .trailing)
+                            }
+
+                            Text("Waits after opening a chat before reading messages, so WhatsApp Web can finish filling the scrollback.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
                                 Text("WebView zoom")
                                 Spacer()
                                 Stepper(
