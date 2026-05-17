@@ -113,7 +113,7 @@ The server currently registers these tools:
 - `update_subject`
 - `resolve_subject`
 - `cancel_subject`
-- `list_active_subjects`
+- `check_active_subjects`
 - `get_subject`
 
 ### Nickname tools

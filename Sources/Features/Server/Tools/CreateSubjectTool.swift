@@ -3,7 +3,7 @@ import Foundation
 struct CreateSubjectTool: MCPToolHandler {
     static let definition = MCPToolDefinition(
         name: "create_subject",
-        description: "Creates a new operational subject to track until resolution.\n\nRequired fields:\n- title: short label\n- summary: detailed operational summary (context + goal + success criteria)\n- initialRequest: triggering request/event (quote or concrete paraphrase)\n\nUse nextSteps for follow-up actions. Use eventLog to record events that happen during the subject's lifecycle (discoveries, outreach, confirmations, calendar updates, client notifications).",
+        description: "Creates a new operational subject to track until resolution.\n\nRequired fields:\n- title: short label\n- summary: detailed operational summary (context + goal + success criteria)\n- initialRequest: the triggering request or event, written with as much concrete detail as possible because it becomes immutable after creation\n\nOptional fields:\n- details: supporting context\n- nextSteps: the current follow-up plan\n\nDo not send updatesLog on creation. Historical updates belong in update_subject(...), not here.",
         inputSchema: [
             "type": .string("object"),
             "properties": .object([
@@ -14,7 +14,6 @@ struct CreateSubjectTool: MCPToolHandler {
                 "priority": .object(["type": .string("number")]),
                 "participants": .object(["type": .string("array"), "items": .object(["type": .string("string")])]),
                 "nextSteps": .object(["type": .string("array"), "items": .object(["type": .string("string")])]),
-                "eventLog": .object(["type": .string("array"), "items": .object(["type": .string("object")])]),
                 "whatsappChatId": .object(["type": .string("string")]),
                 "gmailThreadId": .object(["type": .string("string")]),
                 "calendarEventId": .object(["type": .string("string")])
@@ -29,10 +28,7 @@ struct CreateSubjectTool: MCPToolHandler {
             .init(name: "priority", value: .number(1)),
             .init(name: "participants", value: .array([.string("Codex")])),
             .init(name: "nextSteps", value: .array([.string("Validate the preview")])),
-            .init(name: "eventLog", value: .array([])),
-            .init(name: "whatsappChatId", value: .string("chat-1")),
-            .init(name: "gmailThreadId", value: .string("")),
-            .init(name: "calendarEventId", value: .string(""))
+            .init(name: "whatsappChatId", value: .string("chat-1"))
         ],
         traits: [.writesState]
     )
@@ -48,7 +44,6 @@ struct CreateSubjectTool: MCPToolHandler {
                 priority: arguments.int(for: "priority"),
                 participants: arguments.stringArray(for: "participants"),
                 nextSteps: arguments.stringArray(for: "nextSteps"),
-                eventLog: context.eventEntries(from: call.arguments["eventLog"]?.arrayValue),
                 whatsappChatId: arguments.string(for: "whatsappChatId"),
                 gmailThreadId: arguments.string(for: "gmailThreadId"),
                 calendarEventId: arguments.string(for: "calendarEventId")

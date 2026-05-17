@@ -3,21 +3,18 @@ import Foundation
 struct UpdateSubjectTool: MCPToolHandler {
     static let definition = MCPToolDefinition(
         name: "update_subject",
-        description: "Updates an operational subject by id. Use to append eventLog entries and to update summary/initialRequest/nextSteps as the work progresses. Provide reason when setting status to resolved or canceled.",
+        description: "Updates an operational subject by id.\n\nUse this tool to update title, summary, details, nextSteps, links, participants, and priority as the work progresses.\n\nRules:\n- initialRequest is immutable after creation and cannot be changed here\n- reason is only set through resolve_subject(...) or cancel_subject(...)\n- nextSteps replaces the current array with the one you send\n- appendUpdatesLog appends new updates to the historical updatesLog and ignores exact duplicates\n- use resolve_subject(...) or cancel_subject(...) for terminal status changes",
         inputSchema: [
             "type": .string("object"),
             "properties": .object([
                 "id": .object(["type": .string("string")]),
                 "title": .object(["type": .string("string")]),
                 "summary": .object(["type": .string("string")]),
-                "initialRequest": .object(["type": .string("string")]),
                 "details": .object(["type": .string("string")]),
-                "status": .object(["type": .string("string")]),
-                "reason": .object(["type": .string("string")]),
                 "priority": .object(["type": .string("number")]),
                 "participants": .object(["type": .string("array"), "items": .object(["type": .string("string")])]),
                 "nextSteps": .object(["type": .string("array"), "items": .object(["type": .string("string")])]),
-                "eventLog": .object(["type": .string("array"), "items": .object(["type": .string("object")])]),
+                "appendUpdatesLog": .object(["type": .string("array"), "items": .object(["type": .string("string")])]),
                 "whatsappChatId": .object(["type": .string("string")]),
                 "whatsappAfterMessageId": .object(["type": .string("string")]),
                 "gmailThreadId": .object(["type": .string("string")]),
@@ -29,18 +26,13 @@ struct UpdateSubjectTool: MCPToolHandler {
             .init(name: "id", value: .string("22222222-2222-2222-2222-222222222222")),
             .init(name: "title", value: .string("Preview subject updated")),
             .init(name: "summary", value: .string("Updated from the preview browser.")),
-            .init(name: "initialRequest", value: .string("Refresh the subject data.")),
             .init(name: "details", value: .string("Expanded with more context.")),
-            .init(name: "status", value: .string("resolved")),
-            .init(name: "reason", value: .string("Completed after confirming the final details.")),
             .init(name: "priority", value: .number(2)),
             .init(name: "participants", value: .array([.string("Codex"), .string("Client")])),
             .init(name: "nextSteps", value: .array([.string("Review")])),
-            .init(name: "eventLog", value: .array([])),
+            .init(name: "appendUpdatesLog", value: .array([.string("Confirmed the next follow-up action with the client.")])),
             .init(name: "whatsappChatId", value: .string("chat-1")),
-            .init(name: "whatsappAfterMessageId", value: .string("m2")),
-            .init(name: "gmailThreadId", value: .string("")),
-            .init(name: "calendarEventId", value: .string(""))
+            .init(name: "whatsappAfterMessageId", value: .string("m2"))
         ],
         traits: [.writesState]
     )
@@ -51,26 +43,16 @@ struct UpdateSubjectTool: MCPToolHandler {
             return .failure(SubjectsRepositoryError.invalidParameter("Invalid id"))
         }
 
-        let status = arguments.string(for: "status").flatMap(SubjectStatus.init(rawValue:))
-        let reason = arguments.string(for: "reason")
-        if let status, (status == .resolved || status == .canceled) {
-            guard let reason, !reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-                return .failure(SubjectsRepositoryError.missingParameter("reason"))
-            }
-        }
         do {
             let entry = try await context.subjectsRepository.update(
                 id: id,
                 title: arguments.string(for: "title"),
                 summary: arguments.string(for: "summary"),
-                initialRequest: arguments.string(for: "initialRequest"),
                 details: arguments.string(for: "details"),
-                status: status,
-                reason: reason,
                 priority: arguments.int(for: "priority"),
                 participants: arguments.stringArray(for: "participants"),
                 nextSteps: arguments.stringArray(for: "nextSteps"),
-                eventLog: context.eventEntries(from: call.arguments["eventLog"]?.arrayValue),
+                appendUpdatesLog: arguments.stringArray(for: "appendUpdatesLog"),
                 whatsappChatId: arguments.string(for: "whatsappChatId"),
                 whatsappAfterMessageId: arguments.string(for: "whatsappAfterMessageId"),
                 gmailThreadId: arguments.string(for: "gmailThreadId"),

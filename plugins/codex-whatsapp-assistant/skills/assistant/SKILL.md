@@ -101,7 +101,8 @@ Quando o cliente pedir algo que pode continuar depois deste momento, crie um
 assunto com `create_subject(...)` antes de agir. Exemplo: "procura uma
 psicóloga e marca para mim" vira um assunto com objetivo, contexto, critérios
 de sucesso e próximos passos. Cada pergunta feita ao cliente, mensagem enviada,
-resposta recebida e decisão tomada deve virar `update_subject(...)`.
+resposta recebida e decisão tomada deve virar `update_subject(...)` com
+`appendUpdatesLog` quando houver progresso novo.
 
 Quando o assistente iniciar sem um prompt específico, a primeira varredura
 operacional é `list_unread_chats()`. Se houver mensagens não lidas, carregue as
@@ -160,7 +161,7 @@ ou obsoleta. `get_memories_by_tag()` sem tag também lista tudo, mas
 `list_memories()` deixa essa intenção explícita. Hoje não há busca semântica
 geral de memories, então crie keys claras e tags úteis.
 
-Use `list_active_subjects(...)` como fila de assuntos ainda não resolvidos.
+Use `check_active_subjects(...)` como fila de assuntos ainda não resolvidos.
 Depois de resolver um assunto com `resolve_subject(..., reason)` ou cancelá-lo
 com `cancel_subject(..., reason)`, liste os ativos de novo. Use
 `get_subject(...)` para detalhes e `cancel_subject(...)` só para encerramento

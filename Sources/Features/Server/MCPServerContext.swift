@@ -143,32 +143,36 @@ extension MCPServerContext {
     }
 
     func subjectEntryJSONValue(_ entry: SubjectEntry) -> JSONValue {
-        .object([
+        var payload: [String: JSONValue] = [
             "id": .string(entry.id.uuidString),
             "title": .string(entry.title),
             "summary": .string(entry.summary),
             "initialRequest": .string(entry.initialRequest),
-            "details": entry.details.map(JSONValue.string) ?? .null,
             "status": .string(entry.status.rawValue),
             "priority": .number(Double(entry.priority)),
             "participants": .array(entry.participants.map(JSONValue.string)),
             "nextSteps": .array(entry.nextSteps.map(JSONValue.string)),
-            "eventLog": .array(entry.eventLog.map { event in
-                .object([
-                    "id": .string(event.id.uuidString),
-                    "timestamp": .from(date: event.timestamp),
-                    "description": .string(event.description),
-                    "source": event.source.map(JSONValue.string) ?? .null,
-                    "author": event.author.map(JSONValue.string) ?? .null
-                ])
-            }),
-            "whatsappChatId": entry.whatsappChatId.map(JSONValue.string) ?? .null,
-            "whatsappAfterMessageId": entry.whatsappAfterMessageId.map(JSONValue.string) ?? .null,
-            "gmailThreadId": entry.gmailThreadId.map(JSONValue.string) ?? .null,
-            "calendarEventId": entry.calendarEventId.map(JSONValue.string) ?? .null,
-            "createdAt": .from(date: entry.createdAt),
-            "updatedAt": .from(date: entry.updatedAt)
-        ])
+            "updatesLog": .array(entry.eventLog.map { .string($0.description) }),
+            "createdAt": .from(date: entry.createdAt)
+        ]
+
+        if let details = entry.details?.trimmingCharacters(in: .whitespacesAndNewlines), !details.isEmpty {
+            payload["details"] = .string(details)
+        }
+        if let whatsappChatId = entry.whatsappChatId?.trimmingCharacters(in: .whitespacesAndNewlines), !whatsappChatId.isEmpty {
+            payload["whatsappChatId"] = .string(whatsappChatId)
+        }
+        if let whatsappAfterMessageId = entry.whatsappAfterMessageId?.trimmingCharacters(in: .whitespacesAndNewlines), !whatsappAfterMessageId.isEmpty {
+            payload["whatsappAfterMessageId"] = .string(whatsappAfterMessageId)
+        }
+        if let gmailThreadId = entry.gmailThreadId?.trimmingCharacters(in: .whitespacesAndNewlines), !gmailThreadId.isEmpty {
+            payload["gmailThreadId"] = .string(gmailThreadId)
+        }
+        if let calendarEventId = entry.calendarEventId?.trimmingCharacters(in: .whitespacesAndNewlines), !calendarEventId.isEmpty {
+            payload["calendarEventId"] = .string(calendarEventId)
+        }
+
+        return .object(payload)
     }
 
     func nicknameEntryJSONValue(_ entry: NicknameEntry) -> JSONValue {
@@ -180,26 +184,6 @@ extension MCPServerContext {
         ])
     }
 
-    func eventEntries(from values: [JSONValue]?) -> [EventEntry]? {
-        guard let values else { return nil }
-        return values.compactMap { eventLogEntry in
-            guard let eventObj = eventLogEntry.objectValue else { return nil }
-            let desc = eventObj["description"]?.stringValue ?? ""
-            let source = eventObj["source"]?.stringValue
-            let author = eventObj["author"]?.stringValue
-            let timestampStr = eventObj["timestamp"]?.stringValue
-            let timestamp: Date = {
-                if let iso = ISO8601DateFormatter().date(from: timestampStr ?? "") {
-                    return iso
-                }
-                if let sec = eventObj["timestamp"]?.numberValue {
-                    return Date(timeIntervalSince1970: sec)
-                }
-                return Date()
-            }()
-            return EventEntry(timestamp: timestamp, description: desc, source: source, author: author)
-        }
-    }
 }
 
 private extension MessageDirection {

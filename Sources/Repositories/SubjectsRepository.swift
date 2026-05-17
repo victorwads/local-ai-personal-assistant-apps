@@ -51,7 +51,6 @@ actor SubjectsRepository {
         priority: Int?,
         participants: [String]?,
         nextSteps: [String]?,
-        eventLog: [EventEntry]?,
         whatsappChatId: String?,
         gmailThreadId: String?,
         calendarEventId: String?
@@ -78,16 +77,16 @@ actor SubjectsRepository {
             title: trimmedTitle,
             summary: trimmedSummary,
             initialRequest: trimmedInitialRequest,
-            details: details?.trimmingCharacters(in: .whitespacesAndNewlines),
+            details: normalizedOptional(details),
             status: .active,
             priority: max(0, priority ?? 0),
             participants: (participants ?? []).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty },
             nextSteps: (nextSteps ?? []).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty },
-            eventLog: (eventLog ?? []).sorted { $0.timestamp < $1.timestamp },
-            whatsappChatId: whatsappChatId?.trimmingCharacters(in: .whitespacesAndNewlines),
+            eventLog: [],
+            whatsappChatId: normalizedOptional(whatsappChatId),
             whatsappAfterMessageId: nil,
-            gmailThreadId: gmailThreadId?.trimmingCharacters(in: .whitespacesAndNewlines),
-            calendarEventId: calendarEventId?.trimmingCharacters(in: .whitespacesAndNewlines),
+            gmailThreadId: normalizedOptional(gmailThreadId),
+            calendarEventId: normalizedOptional(calendarEventId),
             createdAt: now,
             updatedAt: now
         )
@@ -100,14 +99,11 @@ actor SubjectsRepository {
         id: UUID?,
         title: String?,
         summary: String?,
-        initialRequest: String?,
         details: String?,
-        status: SubjectStatus?,
-        reason: String?,
         priority: Int?,
         participants: [String]?,
         nextSteps: [String]?,
-        eventLog: [EventEntry]?,
+        appendUpdatesLog: [String]?,
         whatsappChatId: String?,
         whatsappAfterMessageId: String?,
         gmailThreadId: String?,
@@ -135,22 +131,9 @@ actor SubjectsRepository {
                 subject.summary = trimmedSummary
             }
         }
-        if let initialRequest {
-            let trimmed = initialRequest.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !trimmed.isEmpty {
-                subject.initialRequest = trimmed
-            }
-        }
         if let details {
             let trimmed = details.trimmingCharacters(in: .whitespacesAndNewlines)
             subject.details = trimmed.isEmpty ? nil : trimmed
-        }
-        if let status {
-            if status == .resolved || status == .canceled {
-                try applyTerminalStatus(&subject, status: status, reason: reason)
-            } else {
-                subject.status = status
-            }
         }
         if let priority {
             subject.priority = max(0, priority)
@@ -161,8 +144,8 @@ actor SubjectsRepository {
         if let nextSteps {
             subject.nextSteps = nextSteps.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
         }
-        if let eventLog {
-            subject.eventLog = eventLog.sorted { $0.timestamp < $1.timestamp }
+        if let appendUpdatesLog {
+            appendUpdates(appendUpdatesLog, to: &subject)
         }
         if let whatsappChatId {
             let trimmed = whatsappChatId.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -249,8 +232,33 @@ actor SubjectsRepository {
                 source: "manual"
             )
         )
-        subject.eventLog.sort { $0.timestamp < $1.timestamp }
         subject.updatedAt = Date()
+    }
+
+    private func appendUpdates(_ updates: [String], to subject: inout SubjectEntry) {
+        var existingDescriptions = Set(subject.eventLog.map(\.description))
+
+        for update in updates {
+            let trimmed = update.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { continue }
+            guard !existingDescriptions.contains(trimmed) else { continue }
+
+            subject.eventLog.append(
+                EventEntry(
+                    description: trimmed,
+                    source: "assistant",
+                    author: "assistant"
+                )
+            )
+            existingDescriptions.insert(trimmed)
+        }
+    }
+
+    private func normalizedOptional(_ value: String?) -> String? {
+        guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else {
+            return nil
+        }
+        return trimmed
     }
 
     private func loadAll() -> [SubjectEntry] {

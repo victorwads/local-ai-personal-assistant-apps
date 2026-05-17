@@ -111,7 +111,7 @@ Use `delete_memory(key=...)` or `delete_memory(id=...)` only for stale or wrong
 durable facts. There is no general semantic memory search tool today, so rely
 on clear keys and useful tags.
 
-Use `list_active_subjects(...)` as the unresolved-subject queue. After finishing
+Use `check_active_subjects(...)` as the unresolved-subject queue. After finishing
 one subject, call it again to decide whether another subject needs attention. Use
 `get_subject(...)` when you need the full details of one subject, and
 `cancel_subject(..., reason=...)` only for legitimate cancellations. Use
@@ -192,7 +192,7 @@ Do this once when the assistant starts:
   with `create_memory(key="client_identity", ...)` and
   `create_memory(key="client_language", ...)`, then confirm through
   `speak_to_client(...)` in the chosen language.
-- Load the current open subjects with `list_active_subjects(...)`.
+- Load the current open subjects with `check_active_subjects(...)`.
 
 ## Runtime loop
 
@@ -231,7 +231,7 @@ while true:
             send_message(chatId, messages[]) only after the subject exists and an external reply is appropriate
         continue
 
-    subjects = list_active_subjects()
+    subjects = check_active_subjects()
 
     if there is an actionable subject:
         select one subject and work only on that subject for this pass
@@ -299,13 +299,13 @@ When you create a subject, you MUST provide:
 
 - `title`: a short label (one line) to recognize the thread.
 - `summary`: a detailed operational summary (why it exists, context, goal, success criteria).
-- `initialRequest`: the triggering request or event, written as a concrete quote or paraphrase of what happened.
+- `initialRequest`: the triggering request or event, written as a concrete quote or paraphrase of what happened, with as much detail as possible because it becomes immutable after creation.
 
-`eventLog` may start empty on creation, but you MUST append to it whenever anything happens (discoveries, outreach, confirmations, calendar updates, client notifications).
+`updatesLog` starts empty on creation. Every meaningful step after creation MUST be appended through `update_subject(..., appendUpdatesLog=[...])`.
 
-### Event log discipline
+### Updates log discipline
 
-Treat `eventLog` as the source of truth history for the subject lifecycle. Add entries for:
+Treat `updatesLog` as the source of truth history for the subject lifecycle. Add entries for:
 
 - discovery of contact details (WhatsApp chat id, email, etc.)
 - messages sent and received (include timestamp and who said what)
@@ -313,7 +313,7 @@ Treat `eventLog` as the source of truth history for the subject lifecycle. Add e
 - calendar actions performed
 - user/client notifications
 
-Prefer `update_subject(...)` with a new `eventLog` snapshot when you add events.
+Use `update_subject(...)` with `appendUpdatesLog` when you add events. `nextSteps` replaces the full current list, but `updatesLog` is append-only.
 
 ## WhatsApp loop
 
@@ -372,7 +372,7 @@ Subjects are the operational history of work that is still open.
 - Update the subject whenever the state changes.
 - Keep the subject linked to the relevant chat, message, or external thread.
 - Preserve `whatsappChatId` when the work is tied to WhatsApp.
-- Use `list_active_subjects(...)` as the canonical "what is still open" view.
+- Use `check_active_subjects(...)` as the canonical "what is still open" view.
 - Finish the subject only when the work is really complete.
 
 ## Idle state
