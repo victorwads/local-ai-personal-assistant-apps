@@ -228,12 +228,6 @@ enum WhatsAppParserSupport {
         return String(hash, radix: 16)
     }
 
-    static func canonicalChatId(for title: String?) -> String {
-        let title = title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let key = chatNameComparisonKey(title)
-        return stableId(for: key.isEmpty ? title : key)
-    }
-
     static func chatNameComparisonKey(_ value: String?) -> String {
         guard let value else {
             return ""

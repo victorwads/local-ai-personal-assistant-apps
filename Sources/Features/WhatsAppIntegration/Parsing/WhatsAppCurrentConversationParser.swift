@@ -52,7 +52,7 @@ struct WhatsAppCurrentConversationParser {
             }
 
             let signature = WhatsAppParserSupport.messageDeduplicationKey(
-                chatId: WhatsAppParserSupport.canonicalChatId(for: selectedChatName),
+                chatId: selectedChatName ?? "selected-chat",
                 direction: parsedMessage.direction,
                 kind: parsedMessage.kind,
                 text: rawText,
@@ -63,7 +63,7 @@ struct WhatsAppCurrentConversationParser {
             }
             seen.insert(signature)
 
-            let chatId = WhatsAppParserSupport.canonicalChatId(for: selectedChatName)
+            let chatId = selectedChatName ?? "selected-chat"
             let rawAccessibilityText = WhatsAppParserSupport.normalizedUniqueTexts(node.textFragments).joined(separator: " | ")
 
             return Message(

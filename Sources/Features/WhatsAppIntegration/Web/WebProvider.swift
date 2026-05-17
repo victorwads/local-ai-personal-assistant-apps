@@ -42,9 +42,8 @@ private struct WebParser: WhatsAppConversationParser {
         let items = try await bridge.listChatTitles(from: webView, limit: 50)
 
         return items.map { item in
-            let chatId = WhatsAppParserSupport.canonicalChatId(for: item.title)
             return ConversationSummary(
-                id: chatId,
+                id: item.title,
                 accessibilityPath: [],
                 name: item.title,
                 unreadCount: item.unreadCount ?? 0,
@@ -67,7 +66,7 @@ private struct WebParser: WhatsAppConversationParser {
         let capture = try await captureSettledSelectedChat(from: webView, limit: limit)
 
         let title = capture.selectedChatTitle
-        let chatId = WhatsAppParserSupport.canonicalChatId(for: title)
+        let chatId = title ?? "selected-chat"
         let messages: [Message] = capture.messages.map { captured in
             let normalizedText = captured.text.trimmingCharacters(in: .whitespacesAndNewlines)
             let ts = captured.timestampText?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""

@@ -139,6 +139,7 @@ extension Message {
 
     func replacing(
         id: String? = nil,
+        chatId: String? = nil,
         authorName: String?? = nil,
         origin: MessageOrigin? = nil,
         text: String? = nil,
@@ -152,7 +153,7 @@ extension Message {
     ) -> Message {
         Message(
             id: id ?? self.id,
-            chatId: chatId,
+            chatId: chatId ?? self.chatId,
             direction: direction,
             kind: kind,
             authorName: authorName ?? self.authorName,

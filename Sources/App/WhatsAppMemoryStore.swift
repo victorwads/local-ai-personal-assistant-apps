@@ -28,18 +28,24 @@ final class WhatsAppMemoryStore: ObservableObject {
     func replaceAllChatStates(_ chatStatesById: [String: ChatState]) {
         let persistedAt = Date()
         var normalizedStatesById: [String: ChatState] = [:]
-        var normalizedConversations: [ConversationSummary] = []
+        var normalizedConversationsById: [String: ConversationSummary] = [:]
 
         for state in chatStatesById.values {
-            let canonicalChatId = WhatsAppParserSupport.canonicalChatId(for: state.chat.name)
+            let canonicalChatId = canonicalChatId(for: state.chat.name)
             let normalizedChat = state.chat.replacing(id: canonicalChatId)
-            let normalizedState = normalizeChatState(state.replacing(chat: normalizedChat), persistedAt: persistedAt)
+            let normalizedState = normalizeChatState(
+                state.replacing(
+                    chat: normalizedChat,
+                    messages: state.messages.map { $0.replacing(chatId: canonicalChatId) }
+                ),
+                persistedAt: persistedAt
+            )
             normalizedStatesById[canonicalChatId] = normalizedState
-            normalizedConversations.append(normalizedChat)
+            normalizedConversationsById[canonicalChatId] = normalizedChat
         }
 
         self.chatStatesById = normalizedStatesById
-        self.conversations = normalizedConversations.sorted { left, right in
+        self.conversations = Array(normalizedConversationsById.values).sorted { left, right in
             if left.isPinned != right.isPinned {
                 return left.isPinned && !right.isPinned
             }
@@ -52,9 +58,9 @@ final class WhatsAppMemoryStore: ObservableObject {
             return left.name.localizedStandardCompare(right.name) == .orderedAscending
         }
 
-        if let selectedConversationId, let cached = self.chatStatesById[selectedConversationId] {
+        if let selectedConversationId, let cached = self.chatStatesById[canonicalChatId(for: selectedConversationId)] {
             selectedChatState = cached
-        } else if let selectedConversationId, let conversation = self.conversations.first(where: { $0.id == selectedConversationId }) {
+        } else if let selectedConversationId, let conversation = self.conversations.first(where: { $0.id == canonicalChatId(for: selectedConversationId) }) {
             selectedChatState = ChatState(
                 chat: conversation,
                 messages: [],
@@ -72,29 +78,52 @@ final class WhatsAppMemoryStore: ObservableObject {
 
     func replaceConversations(_ conversations: [ConversationSummary]) {
         for conversation in conversations {
-            if let index = self.conversations.firstIndex(where: { $0.id == conversation.id }) {
-                self.conversations[index] = conversation
+            let canonicalId = canonicalChatId(for: conversation.name)
+            let normalizedConversation = conversation.replacing(id: canonicalId)
+
+            if let index = self.conversations.firstIndex(where: { $0.id == canonicalId }) {
+                self.conversations[index] = normalizedConversation
             } else {
-                self.conversations.append(conversation)
+                self.conversations.append(normalizedConversation)
             }
 
-            if let cachedState = chatStatesById[conversation.id] {
-                chatStatesById[conversation.id] = cachedState.replacing(chat: conversation)
-                if selectedConversationId == conversation.id {
-                    selectedChatState = chatStatesById[conversation.id]
+            if let cachedState = chatStatesById[canonicalId] {
+                chatStatesById[canonicalId] = cachedState.replacing(chat: normalizedConversation)
+                if selectedConversationId == canonicalId {
+                    selectedChatState = chatStatesById[canonicalId]
                 }
             }
         }
 
-        if let selectedConversationId,
-           let latestSelectedConversation = self.conversations.first(where: { $0.id == selectedConversationId }) {
-            selectedChatState = chatStatesById[selectedConversationId]?.replacing(chat: latestSelectedConversation)
-                ?? ChatState(
-                    chat: latestSelectedConversation,
-                    messages: [],
-                    composeFocused: false,
-                    canSendText: false
-                )
+        self.conversations = Array(
+            Dictionary(grouping: self.conversations, by: \.id)
+                .compactMapValues { $0.last }
+                .values
+        )
+        .sorted { left, right in
+            if left.isPinned != right.isPinned {
+                return left.isPinned && !right.isPinned
+            }
+            if left.unreadCount != right.unreadCount {
+                return left.unreadCount > right.unreadCount
+            }
+            if left.lastMessageAtText != right.lastMessageAtText {
+                return (left.lastMessageAtText ?? "").localizedStandardCompare(right.lastMessageAtText ?? "") == .orderedDescending
+            }
+            return left.name.localizedStandardCompare(right.name) == .orderedAscending
+        }
+
+        if let selectedConversationId {
+            let canonicalSelectedId = canonicalChatId(for: selectedConversationId)
+            if let latestSelectedConversation = self.conversations.first(where: { $0.id == canonicalSelectedId }) {
+                selectedChatState = chatStatesById[canonicalSelectedId]?.replacing(chat: latestSelectedConversation)
+                    ?? ChatState(
+                        chat: latestSelectedConversation,
+                        messages: [],
+                        composeFocused: false,
+                        canSendText: false
+                    )
+            }
         }
 
         emit(.conversationsUpdated(self.conversations))
@@ -102,17 +131,24 @@ final class WhatsAppMemoryStore: ObservableObject {
 
     func upsertChatState(_ chatState: ChatState) {
         let persistedAt = Date()
-        let normalizedState = normalizeChatState(chatState, persistedAt: persistedAt)
-        let existingState = chatStatesById[chatState.chat.id]
+        let canonicalId = canonicalChatId(for: chatState.chat.name)
+        let normalizedState = normalizeChatState(
+            chatState.replacing(
+                chat: chatState.chat.replacing(id: canonicalId),
+                messages: chatState.messages.map { $0.replacing(chatId: canonicalId) }
+            ),
+            persistedAt: persistedAt
+        )
+        let existingState = chatStatesById[canonicalId]
         let mergedMessages = mergeMessages(existing: existingState?.messages ?? [], incoming: normalizedState.messages, persistedAt: persistedAt)
         let mergedState = normalizedState.replacing(
             messages: mergedMessages,
             composeFocused: normalizedState.composeFocused,
             canSendText: normalizedState.canSendText
         )
-        chatStatesById[chatState.chat.id] = mergedState
+        chatStatesById[canonicalId] = mergedState
 
-        if selectedConversationId == chatState.chat.id {
+        if selectedConversationId == canonicalId {
             selectedChatState = mergedState
         }
 
@@ -120,18 +156,19 @@ final class WhatsAppMemoryStore: ObservableObject {
     }
 
     func selectConversation(id: String) {
-        selectedConversationId = id
-        if let conversation = conversations.first(where: { $0.id == id }) {
-            selectedChatState = chatStatesById[id] ?? ChatState(
+        let canonicalId = canonicalChatId(for: id)
+        selectedConversationId = canonicalId
+        if let conversation = conversations.first(where: { $0.id == canonicalId }) {
+            selectedChatState = chatStatesById[canonicalId] ?? ChatState(
                 chat: conversation,
                 messages: [],
                 composeFocused: false,
                 canSendText: false
             )
         } else {
-            selectedChatState = chatStatesById[id]
+            selectedChatState = chatStatesById[canonicalId]
         }
-        emit(.selectedConversationChanged(id))
+        emit(.selectedConversationChanged(canonicalId))
     }
 
     func clearSelection() {
@@ -141,10 +178,11 @@ final class WhatsAppMemoryStore: ObservableObject {
     }
 
     func removeConversation(id: String) {
-        conversations.removeAll { $0.id == id }
-        chatStatesById.removeValue(forKey: id)
+        let canonicalId = canonicalChatId(for: id)
+        conversations.removeAll { $0.id == canonicalId }
+        chatStatesById.removeValue(forKey: canonicalId)
 
-        if selectedConversationId == id {
+        if selectedConversationId == canonicalId {
             clearSelection()
         } else {
             emit(.conversationsUpdated(conversations))
@@ -181,11 +219,11 @@ final class WhatsAppMemoryStore: ObservableObject {
     }
 
     func chatState(for id: String) -> ChatState? {
-        chatStatesById[id]
+        chatStatesById[canonicalChatId(for: id)]
     }
 
     func conversation(for id: String) -> ConversationSummary? {
-        conversations.first(where: { $0.id == id })
+        conversations.first(where: { $0.id == canonicalChatId(for: id) })
     }
 
     func unreadMessages(chatId: String? = nil) -> [Message] {
@@ -196,7 +234,7 @@ final class WhatsAppMemoryStore: ObservableObject {
     }
 
     func pendingIncomingCount(chatId: String) -> Int {
-        guard let state = chatStatesById[chatId] else {
+        guard let state = chatStatesById[canonicalChatId(for: chatId)] else {
             return 0
         }
         return state.messages.filter { $0.direction == .incoming && !$0.isHandled }.count
@@ -211,7 +249,7 @@ final class WhatsAppMemoryStore: ObservableObject {
     }
 
     func recentMessages(chatId: String, limit: Int) -> [Message] {
-        guard let state = chatStatesById[chatId] else {
+        guard let state = chatStatesById[canonicalChatId(for: chatId)] else {
             return []
         }
         return Array(state.messages.suffix(max(1, limit)))
@@ -242,7 +280,8 @@ final class WhatsAppMemoryStore: ObservableObject {
     }
 
     func markMessageAndFollowingAsUnhandled(messageId: String, chatId: String) {
-        guard let state = chatStatesById[chatId],
+        let canonicalId = canonicalChatId(for: chatId)
+        guard let state = chatStatesById[canonicalId],
               let index = state.messages.firstIndex(where: { $0.id == messageId }) else {
             return
         }
@@ -256,11 +295,12 @@ final class WhatsAppMemoryStore: ObservableObject {
             return
         }
 
-        updateMessages(messageIds: messageIds, handledAt: nil, chatId: chatId)
+        updateMessages(messageIds: messageIds, handledAt: nil, chatId: canonicalId)
     }
 
     func markMessageAndFollowingAsHandled(messageId: String, chatId: String) {
-        guard let state = chatStatesById[chatId],
+        let canonicalId = canonicalChatId(for: chatId)
+        guard let state = chatStatesById[canonicalId],
               let index = state.messages.firstIndex(where: { $0.id == messageId }) else {
             return
         }
@@ -274,7 +314,7 @@ final class WhatsAppMemoryStore: ObservableObject {
             return
         }
 
-        updateMessages(messageIds: messageIds, handledAt: Date(), chatId: chatId)
+        updateMessages(messageIds: messageIds, handledAt: Date(), chatId: canonicalId)
     }
 
     /// Wait indefinitely (no timeout) until a new message arrives.
@@ -462,7 +502,7 @@ final class WhatsAppMemoryStore: ObservableObject {
 
     private func messages(chatId: String?, onlyUnhandled: Bool) -> [Message] {
         let allMessages: [Message]
-        if let chatId, let state = chatStatesById[chatId] {
+        if let chatId, let state = chatStatesById[canonicalChatId(for: chatId)] {
             allMessages = state.messages
         } else {
             allMessages = chatStatesById.values.flatMap(\.messages)
@@ -476,7 +516,7 @@ final class WhatsAppMemoryStore: ObservableObject {
     private func updateMessages(messageIds: Set<String>, handledAt: Date?, chatId: String?) {
         let targetChatIds: [String]
         if let chatId {
-            targetChatIds = [chatId]
+            targetChatIds = [canonicalChatId(for: chatId)]
         } else {
             targetChatIds = Array(chatStatesById.keys)
         }
@@ -532,13 +572,13 @@ final class WhatsAppMemoryStore: ObservableObject {
 
     private func latestMessageResult(chatId: String?, afterMessageId: String?) -> WaitForMessageResult? {
         let candidates: [ChatState]
-        if let chatId, let chatState = chatStatesById[chatId] {
+        if let chatId, let chatState = chatStatesById[canonicalChatId(for: chatId)] {
             candidates = [chatState]
         } else {
             candidates = Array(chatStatesById.values)
         }
 
-        let latestCandidate = candidates
+        return candidates
             .compactMap { chatState -> WaitForMessageResult? in
                 guard let latestMessage = chatState.messages.last else {
                     return nil
@@ -553,17 +593,21 @@ final class WhatsAppMemoryStore: ObservableObject {
             .sorted { lhs, rhs in
                 switch (lhs.message.timestamp, rhs.message.timestamp) {
                 case let (left?, right?):
-                    return left > right
+                    if left != right { return left > right }
                 case (.some, .none):
                     return true
                 case (.none, .some):
                     return false
                 case (.none, .none):
-                    return lhs.message.id > rhs.message.id
+                    break
                 }
+
+                return lhs.message.id > rhs.message.id
             }
             .first
+    }
 
-        return latestCandidate
+    private func canonicalChatId(for value: String) -> String {
+        WhatsAppConversationIdentity.canonicalChatId(for: value)
     }
 }

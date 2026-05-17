@@ -176,11 +176,10 @@ extension AppModel {
     }
 
     private func makeWhatsAppWebConversation(
-        accountId: UUID,
+        accountId _: UUID,
         chatTitle: String,
         capture: WhatsAppWebChatCapture
     ) -> ConversationSummary {
-        let chatId = WhatsAppParserSupport.canonicalChatId(for: chatTitle)
         let lastMessage = capture.messages.last
         let lastMessageStatus: MessageStatus = {
             switch lastMessage?.statusTestId {
@@ -194,7 +193,7 @@ extension AppModel {
         }()
 
         return ConversationSummary(
-            id: chatId,
+            id: chatTitle,
             accessibilityPath: [],
             name: chatTitle,
             unreadCount: 0,
@@ -209,11 +208,11 @@ extension AppModel {
     }
 
     private func makeWhatsAppWebChatState(
-        accountId: UUID,
+        accountId _: UUID,
         conversation: ConversationSummary,
         capture: WhatsAppWebChatCapture
     ) -> ChatState {
-        let chatId = conversation.id
+        let chatId = conversation.name
         let messages: [Message] = capture.messages.map { captured in
             let normalizedText = captured.text.trimmingCharacters(in: .whitespacesAndNewlines)
             let ts = captured.timestampText?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""

@@ -56,9 +56,12 @@ extension AppModel {
         var normalizedStatesByChatId: [String: ChatState] = [:]
 
         for state in payload.chatStatesByChatId.values {
-            let canonicalChatId = WhatsAppParserSupport.canonicalChatId(for: state.chat.name)
+            let canonicalChatId = WhatsAppConversationIdentity.canonicalChatId(for: state.chat.name)
             let normalizedChat = state.chat.replacing(id: canonicalChatId)
-            let normalizedState = state.replacing(chat: normalizedChat)
+            let normalizedState = state.replacing(
+                chat: normalizedChat,
+                messages: state.messages.map { $0.replacing(chatId: canonicalChatId) }
+            )
             normalizedStatesByChatId[canonicalChatId] = normalizedState
         }
 

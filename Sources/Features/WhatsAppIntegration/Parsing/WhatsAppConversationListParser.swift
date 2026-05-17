@@ -19,7 +19,7 @@ struct WhatsAppConversationListParser {
                 return nil
             }
 
-            let id = WhatsAppParserSupport.canonicalChatId(for: name)
+            let id = name
             guard !seenIds.contains(id) else {
                 return nil
             }
