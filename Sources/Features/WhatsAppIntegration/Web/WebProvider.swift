@@ -95,7 +95,18 @@ private struct WebInteractor: WhatsAppConversationInteractor {
             return
         }
         let webView = sessionStore.webView(for: account)
-        try await bridge.openChatByTitle(from: webView, title: conversation.name)
-        try await Task.sleep(for: .milliseconds(250))
+        let targetKey = WhatsAppParserSupport.chatNameComparisonKey(conversation.name)
+
+        for _ in 1...3 {
+            try await bridge.openChatByTitle(from: webView, title: conversation.name)
+            try await Task.sleep(for: .milliseconds(300))
+            let snapshot = try await bridge.captureSnapshot(from: webView)
+            let currentKey = WhatsAppParserSupport.chatNameComparisonKey(snapshot.selectedChatTitle)
+            if snapshot.flow == .chatSelected, currentKey == targetKey {
+                return
+            }
+        }
+
+        throw WhatsAppWebBridgeError.elementNotFound
     }
 }

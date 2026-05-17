@@ -221,7 +221,8 @@ final class WhatsAppWebBridge {
     (() => {
       const pickText = (value) => typeof value === 'string' ? value.trim() : '';
       const target = "__TITLE__";
-      const candidates = Array.from(document.querySelectorAll('[title]'));
+      const pane = document.querySelector('#pane-side') || document;
+      const candidates = Array.from(pane.querySelectorAll('[title]'));
       const node = candidates.find((n) => pickText(n.getAttribute('title')) === target);
       if (!node) return "not_found";
       const clickable = node.closest('div[role=\"listitem\"], div[role=\"row\"], button') || node;

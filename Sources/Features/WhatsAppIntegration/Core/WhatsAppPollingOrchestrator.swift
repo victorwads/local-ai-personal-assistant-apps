@@ -47,6 +47,12 @@ final class WhatsAppPollingOrchestrator {
             do {
                 try await provider.interactor.openConversation(conversation)
                 let read = try await provider.parser.readMessages(limit: messageLimit)
+                let expectedKey = WhatsAppParserSupport.chatNameComparisonKey(conversation.name)
+                let actualKey = WhatsAppParserSupport.chatNameComparisonKey(read.selectedChatName)
+                if actualKey != expectedKey {
+                    appendLog("Selection mismatch: expected \(conversation.name) but parsed \(read.selectedChatName ?? "unknown"). Skipping ingest.", .warning)
+                    continue
+                }
                 let chatState = ChatState(
                     chat: conversation,
                     messages: read.messages,
@@ -61,4 +67,3 @@ final class WhatsAppPollingOrchestrator {
         }
     }
 }
-
