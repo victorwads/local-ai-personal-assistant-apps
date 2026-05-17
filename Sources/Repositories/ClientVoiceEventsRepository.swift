@@ -38,6 +38,7 @@ actor ClientVoiceEventsRepository {
 
     func clearAll() {
         defaults.removeObject(forKey: storageKey)
+        NotificationCenter.default.post(name: .clientVoiceEventsRepositoryDidChange, object: nil)
         let waiters = pendingWaitersById
         pendingWaitersById.removeAll()
         waiters.values.forEach { $0.resume(throwing: CancellationError()) }
@@ -137,5 +138,6 @@ actor ClientVoiceEventsRepository {
             return
         }
         defaults.set(data, forKey: storageKey)
+        NotificationCenter.default.post(name: .clientVoiceEventsRepositoryDidChange, object: nil)
     }
 }

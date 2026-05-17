@@ -25,10 +25,6 @@ struct NicknamesScreen: View {
                 Text("Saved")
                     .font(.headline)
                 Spacer()
-                Button("Refresh") {
-                    Task { await reload() }
-                }
-                .disabled(isWorking)
             }
 
             List(entries) { entry in
@@ -75,6 +71,12 @@ struct NicknamesScreen: View {
                 selectedChatId = appModel.conversations.first?.id ?? ""
             }
             await reload()
+        }
+        .task {
+            guard !PreviewSupport.isRunningForPreviews else { return }
+            for await _ in NotificationCenter.default.notifications(named: .nicknamesRepositoryDidChange) {
+                await reload()
+            }
         }
     }
 

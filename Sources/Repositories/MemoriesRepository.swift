@@ -82,6 +82,6 @@ actor MemoriesRepository {
             return
         }
         defaults.set(data, forKey: storageKey)
+        NotificationCenter.default.post(name: .memoriesRepositoryDidChange, object: nil)
     }
 }
-

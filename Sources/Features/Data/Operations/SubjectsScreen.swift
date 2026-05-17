@@ -31,11 +31,6 @@ struct SubjectsScreen: View {
                 .frame(maxWidth: 360)
 
                 Spacer()
-
-                Button("Refresh") {
-                    Task { await reload() }
-                }
-                .disabled(isWorking)
             }
 
             if let errorText {
@@ -189,6 +184,12 @@ struct SubjectsScreen: View {
         .task {
             guard !PreviewSupport.isRunningForPreviews else { return }
             await reload()
+        }
+        .task {
+            guard !PreviewSupport.isRunningForPreviews else { return }
+            for await _ in NotificationCenter.default.notifications(named: .subjectsRepositoryDidChange) {
+                await reload()
+            }
         }
     }
 

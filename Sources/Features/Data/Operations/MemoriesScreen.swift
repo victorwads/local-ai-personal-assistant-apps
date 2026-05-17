@@ -13,10 +13,6 @@ struct MemoriesScreen: View {
                 Text("Saved")
                     .font(.headline)
                 Spacer()
-                Button("Refresh") {
-                    Task { await reload() }
-                }
-                .disabled(isWorking)
             }
 
             if let errorText {
@@ -68,6 +64,12 @@ struct MemoriesScreen: View {
         .task {
             guard !PreviewSupport.isRunningForPreviews else { return }
             await reload()
+        }
+        .task {
+            guard !PreviewSupport.isRunningForPreviews else { return }
+            for await _ in NotificationCenter.default.notifications(named: .memoriesRepositoryDidChange) {
+                await reload()
+            }
         }
     }
 

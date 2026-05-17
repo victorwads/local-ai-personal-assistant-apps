@@ -204,6 +204,14 @@ final class AppModel: ObservableObject {
                 }
             }
             .store(in: &cancellables)
+
+        NotificationCenter.default.publisher(for: .clientVoiceEventsRepositoryDidChange)
+            .sink { [weak self] _ in
+                Task { [weak self] in
+                    await self?.refreshPendingClientAskCount()
+                }
+            }
+            .store(in: &cancellables)
     }
 
     func refreshPendingClientAskCount() async {

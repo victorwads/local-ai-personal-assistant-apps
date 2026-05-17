@@ -99,6 +99,6 @@ actor NicknamesRepository {
             return
         }
         defaults.set(data, forKey: storageKey)
+        NotificationCenter.default.post(name: .nicknamesRepositoryDidChange, object: nil)
     }
 }
-

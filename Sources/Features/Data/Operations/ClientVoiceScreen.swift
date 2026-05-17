@@ -46,6 +46,12 @@ struct ClientVoiceScreen: View {
             guard !PreviewSupport.isRunningForPreviews else { return }
             await reload()
         }
+        .task {
+            guard !PreviewSupport.isRunningForPreviews else { return }
+            for await _ in NotificationCenter.default.notifications(named: .clientVoiceEventsRepositoryDidChange) {
+                await reload()
+            }
+        }
     }
 
     private var header: some View {
@@ -64,11 +70,6 @@ struct ClientVoiceScreen: View {
             }
 
             Spacer()
-
-            Button("Refresh") {
-                Task { await reload() }
-            }
-            .disabled(isWorking)
 
             Button("Clear") {
                 showingClearHistoryConfirmation = true

@@ -336,5 +336,6 @@ actor SubjectsRepository {
             return
         }
         defaults.set(data, forKey: storageKey)
+        NotificationCenter.default.post(name: .subjectsRepositoryDidChange, object: nil)
     }
 }
