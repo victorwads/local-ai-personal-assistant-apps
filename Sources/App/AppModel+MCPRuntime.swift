@@ -60,12 +60,12 @@ final class AppModelMCPRuntimeAdapter: MCPServerRuntimeProviding {
 
     func sendMessageViaScheduler(_ text: String, to conversationId: String) async throws {
         guard let appModel else { throw CancellationError() }
-        try await appModel.whatsappMessageSendCoordinator.sendMessageViaScheduler(text, to: conversationId)
+        try await appModel.sendWhatsAppMessageViaCurrentIntegration(text, to: conversationId)
     }
 
     func sendMessagesViaScheduler(_ texts: [String], to conversationId: String) async throws {
         guard let appModel else { throw CancellationError() }
-        try await appModel.whatsappMessageSendCoordinator.sendMessagesViaScheduler(texts, to: conversationId)
+        try await appModel.sendWhatsAppMessagesViaCurrentIntegration(texts, to: conversationId)
     }
 
     func ensureChatLoaded(chatId: String, reason: String) async {

@@ -117,7 +117,7 @@ struct ConversationsScreen: View {
         defer { appModel.isSendingMessage = false }
 
         do {
-            try await appModel.whatsappMessageSendCoordinator.sendMessageViaScheduler(
+            try await appModel.sendWhatsAppMessageViaCurrentIntegration(
                 trimmedMessage,
                 to: selectedChatState.chat.id
             )

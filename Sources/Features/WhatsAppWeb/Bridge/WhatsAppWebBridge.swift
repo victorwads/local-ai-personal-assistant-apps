@@ -117,6 +117,30 @@ final class WhatsAppWebBridge {
         }
     }
 
+    struct MessageSendResult: Codable, Equatable {
+        let result: String
+        let composerFound: Bool
+        let inserted: Bool
+        let composerSelector: String?
+        let currentText: String?
+        let selectedChatTitle: String?
+    }
+
+    func sendMessage(from webView: WKWebView, text: String) async throws -> MessageSendResult {
+        let script = Self.sendMessageScript.replacingOccurrences(of: "__MESSAGE__", with: Self.javascriptStringLiteral(text))
+        let json = try await webView.evaluateJavaScriptString(script)
+
+        guard let data = json.data(using: .utf8) else {
+            throw WhatsAppWebBridgeError.invalidSnapshotPayload
+        }
+
+        do {
+            return try JSONDecoder().decode(MessageSendResult.self, from: data)
+        } catch {
+            throw WhatsAppWebBridgeError.invalidSnapshotPayload
+        }
+    }
+
     private static let snapshotScript = """
     (() => {
       const pickText = (value) => typeof value === 'string' ? value.trim() : '';
@@ -452,6 +476,107 @@ final class WhatsAppWebBridge {
       });
     })();
     """
+
+    private static let sendMessageScript = """
+    (() => {
+      const pickText = (value) => typeof value === 'string' ? value.trim() : '';
+      const main = document.querySelector('#main') || document;
+      const text = __MESSAGE__;
+
+      const composerCandidates = [
+        main.querySelector('[data-testid="conversation-panel-wrapper"] [data-lexical-editor]'),
+        main.querySelector('[data-testid="conversation-panel-wrapper"] [contenteditable="true"]'),
+        main.querySelector('[data-testid="conversation-panel-wrapper"] [role="textbox"]'),
+        main.querySelector('[data-tab="8"] [data-lexical-editor]'),
+        main.querySelector('[data-tab="8"] [contenteditable="true"]'),
+        main.querySelector('[data-tab="8"] [role="textbox"]'),
+        main.querySelector('[data-tab="8"]'),
+      ];
+      const composer = composerCandidates.find(Boolean) || null;
+
+      const composerSelector = composer?.getAttribute('data-testid') ||
+        composer?.getAttribute('data-tab') ||
+        composer?.getAttribute('role') ||
+        composer?.tagName ||
+        null;
+
+      if (!composer) {
+        return JSON.stringify({
+          result: "not_found",
+          composerFound: false,
+          inserted: false,
+          composerSelector: null,
+          currentText: null,
+          selectedChatTitle: pickText(
+            document.querySelector('[data-testid="conversation-info-header-chat-title"]')?.textContent ||
+            document.querySelector('[data-testid="conversation-info-header"] [title]')?.getAttribute('title') ||
+            null
+          ) || null
+        });
+      }
+
+      const selection = window.getSelection?.();
+      const range = document.createRange();
+      try { composer.focus?.(); } catch {}
+      try { composer.scrollIntoView?.({ block: 'center', inline: 'center' }); } catch {}
+
+      try {
+        range.selectNodeContents(composer);
+        selection?.removeAllRanges?.();
+        selection?.addRange?.(range);
+        document.execCommand('delete');
+      } catch {}
+
+      let inserted = false;
+      try {
+        inserted = document.execCommand('insertText', false, text);
+      } catch {}
+
+      if (!inserted) {
+        try {
+          composer.textContent = text;
+          composer.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, data: text, inputType: 'insertText' }));
+          inserted = pickText(composer.innerText || composer.textContent || '') === pickText(text);
+        } catch {}
+      }
+
+      const currentText = pickText(composer.innerText || composer.textContent || '') || null;
+      const keyEventInit = {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        key: 'Enter',
+        code: 'Enter',
+        keyCode: 13,
+        which: 13
+      };
+
+      try { composer.dispatchEvent(new KeyboardEvent('keydown', keyEventInit)); } catch {}
+      try { composer.dispatchEvent(new KeyboardEvent('keypress', keyEventInit)); } catch {}
+      try { composer.dispatchEvent(new KeyboardEvent('keyup', keyEventInit)); } catch {}
+
+      return JSON.stringify({
+        result: inserted ? "ok" : "partial",
+        composerFound: true,
+        inserted,
+        composerSelector,
+        currentText,
+        selectedChatTitle: pickText(
+          document.querySelector('[data-testid="conversation-info-header-chat-title"]')?.textContent ||
+          document.querySelector('[data-testid="conversation-info-header"] [title]')?.getAttribute('title') ||
+          null
+        ) || null
+      });
+    })();
+    """
+
+    private static func javascriptStringLiteral(_ value: String) -> String {
+        guard let data = try? JSONEncoder().encode(value),
+              let json = String(data: data, encoding: .utf8) else {
+            return "\"\""
+        }
+        return json
+    }
 }
 
 @MainActor
