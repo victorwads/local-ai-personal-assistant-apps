@@ -7,7 +7,7 @@ final class WhatsAppWebSettingsModel: ObservableObject {
     static let defaultInspectable = true
     static let defaultBridgePollingEnabled = true
     static let defaultBridgePollingIntervalSeconds = 5.0
-    static let defaultPageZoom = 0.5
+    static let defaultPageZoom = 0.85
 
     @Published var customUserAgent: String
     @Published var isInspectable: Bool

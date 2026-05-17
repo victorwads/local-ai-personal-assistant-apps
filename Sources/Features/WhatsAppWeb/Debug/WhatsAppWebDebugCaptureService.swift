@@ -37,14 +37,16 @@ final class WhatsAppWebDebugCaptureService {
         }
     }
 
-    func saveSnapshot(accountName: String, snapshot: WhatsAppWebPageSnapshot) -> URL? {
+    func saveSnapshot(accountName: String, captureName: String?, snapshot: WhatsAppWebPageSnapshot) -> URL? {
         do {
             let capturesDirectory = capturesDirectoryURL()
             try FileManager.default.createDirectory(at: capturesDirectory, withIntermediateDirectories: true)
 
             let timestamp = Self.debugCaptureTimestamp(Date())
-            let slug = Self.debugCaptureFileSlug(accountName)
-            let fileURL = capturesDirectory.appendingPathComponent("\(timestamp)-\(slug).yaml")
+            let accountSlug = Self.debugCaptureFileSlug(accountName)
+            let captureSlug = Self.debugCaptureFileSlug(captureName ?? "")
+            let suffix = captureSlug == "capture" ? accountSlug : "\(accountSlug)-\(captureSlug)"
+            let fileURL = capturesDirectory.appendingPathComponent("\(timestamp)-\(suffix).yaml")
             let contents = WhatsAppWebDebugArtifacts.captureYAML(accountName: accountName, snapshot: snapshot)
             try contents.write(to: fileURL, atomically: true, encoding: .utf8)
             log("Saved WhatsApp Web debug capture to \(fileURL.path).", .info)

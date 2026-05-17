@@ -3,6 +3,7 @@ import WebKit
 
 struct WhatsAppWebScreen: View {
     @EnvironmentObject private var appModel: AppModel
+    @State private var captureNameDraft = ""
 
     var body: some View {
         detail
@@ -27,6 +28,10 @@ struct WhatsAppWebScreen: View {
 
                     Spacer()
 
+                    TextField("Capture name", text: $captureNameDraft)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 220)
+
                     Button {
                         Task {
                             await appModel.captureWhatsAppWebSnapshot(for: account)
@@ -37,7 +42,9 @@ struct WhatsAppWebScreen: View {
 
                     Button {
                         Task {
-                            await appModel.captureAndSaveWhatsAppWebSnapshot(for: account)
+                            let trimmedName = captureNameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+                            await appModel.captureAndSaveWhatsAppWebSnapshot(for: account, named: trimmedName.isEmpty ? nil : trimmedName)
+                            captureNameDraft = ""
                         }
                     } label: {
                         Label("Save Snapshot", systemImage: "square.and.arrow.down")
