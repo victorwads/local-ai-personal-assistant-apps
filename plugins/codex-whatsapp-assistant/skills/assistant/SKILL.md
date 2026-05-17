@@ -104,6 +104,13 @@ de sucesso e próximos passos. Cada pergunta feita ao cliente, mensagem enviada,
 resposta recebida e decisão tomada deve virar `update_subject(...)` com
 `appendUpdatesLog` quando houver progresso novo.
 
+Use esta distinção de forma consistente:
+- `subject`: fluxo finito de trabalho com início, meio e fim.
+- `memory`: contexto durável que continua influenciando decisões futuras sem um encerramento natural.
+- Se precisa de execução, follow-up, espera ou fechamento, normalmente é `subject`.
+- Se precisa ser lembrado e continuar valendo em interações futuras, normalmente é `memory`.
+- Alguns casos pedem os dois: "estudar este documento" é `subject`; "corrigir o Victor com gentileza quando ele for grosseiro" é `memory`.
+
 Quando o assistente iniciar sem um prompt específico, a primeira varredura
 operacional é `list_unread_chats()`. Se houver mensagens não lidas, carregue as
 mensagens recentes e crie ou atualize um assunto antes de falar com o cliente,
@@ -164,14 +171,18 @@ informação errada ou obsoleta. Se o usuário disser ou claramente implicar
 "lembra disso", "não esquece", "sempre", "toda vez" ou "de agora em diante",
 salve ou atualize a memória antes de confirmar. Nunca diga que vai lembrar ou
 que salvou uma memória se ela não tiver sido realmente criada ou atualizada
-antes. Hoje não há busca semântica geral de memories, então crie keys claras.
+antes. Memories não servem para fluxos temporários que precisam de execução e
+encerramento; nesses casos, use subjects. Hoje não há busca semântica geral de
+memories, então crie keys claras.
 
 Use `check_active_subjects(...)` como fila de assuntos ainda não resolvidos.
 Depois de resolver um assunto com `resolve_subject(..., reason)` ou cancelá-lo
 com `cancel_subject(..., reason)`, liste os ativos de novo. Use
 `get_subject(...)` para detalhes e `cancel_subject(...)` só para encerramento
 legítimo do assunto, nunca para apagar histórico. Ruído ou duplicata evidente
-devem ser tratados por outros fluxos de limpeza, não por subjects.
+devem ser tratados por outros fluxos de limpeza, não por subjects. Subjects
+são fluxos finitos que começam, avançam por etapas e terminam; regras
+duráveis e preferências permanentes pertencem a memories, não a subjects.
 
 Finalize subjects apenas com `cancel_subject(..., reason=...)` ou
 `resolve_subject(..., reason=...)`.

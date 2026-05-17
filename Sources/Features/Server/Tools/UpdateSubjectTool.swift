@@ -3,7 +3,15 @@ import Foundation
 struct UpdateSubjectTool: MCPToolHandler {
     static let definition = MCPToolDefinition(
         name: "update_subject",
-        description: "Updates an operational subject by id.\n\nUse this tool to update title, summary, details, nextSteps, links, participants, and priority as the work progresses.\n\nRules:\n- initialRequest is immutable after creation and cannot be changed here\n- reason is only set through resolve_subject(...) or cancel_subject(...)\n- nextSteps replaces the current array with the one you send\n- appendUpdatesLog appends new updates to the historical updatesLog and ignores exact duplicates\n- use resolve_subject(...) or cancel_subject(...) for terminal status changes",
+        description: """
+        Updates an existing operational subject by id.
+
+        Use this tool to change fields and record progress while the subject is still open.
+
+        Rules:
+        - `nextSteps` replaces the current array
+        - `appendUpdatesLog` appends new updates and ignores exact duplicates
+        """,
         inputSchema: [
             "type": .string("object"),
             "properties": .object([

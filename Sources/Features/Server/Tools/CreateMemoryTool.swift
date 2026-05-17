@@ -3,7 +3,13 @@ import Foundation
 struct CreateMemoryTool: MCPToolHandler {
     static let definition = MCPToolDefinition(
         name: "create_memory",
-        description: "Creates or updates a long-term memory entry keyed by `key`.\n\nUse this for durable facts and persistent instructions the assistant must keep applying in future interactions. This includes standing instructions, recurring corrections, behavioral preferences, durable constraints, and anything the user expects you to remember across future conversations.\n\nAlways save a memory before replying if the user communicates any of these patterns:\n- remember this\n- do not forget\n- always / every time / from now on\n- preferred behavior, correction style, or standing instruction\n- recurring preference or durable constraint\n- anything the assistant promises to keep doing in the future\n\nDo not tell the user you will remember something unless you save the memory first. If the key already exists, this tool updates the existing memory instead of creating a duplicate.",
+        description: """
+        Creates or updates a long-term memory entry keyed by `key`.
+
+        Use this for durable facts and standing instructions that should keep influencing future interactions. If the key already exists, it updates the existing memory instead of creating a duplicate.
+
+        Do not tell the user you will remember something unless you save the memory first.
+        """,
         inputSchema: [
             "type": .string("object"),
             "properties": .object([

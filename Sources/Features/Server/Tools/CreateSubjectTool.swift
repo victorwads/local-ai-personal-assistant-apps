@@ -3,7 +3,13 @@ import Foundation
 struct CreateSubjectTool: MCPToolHandler {
     static let definition = MCPToolDefinition(
         name: "create_subject",
-        description: "Creates a new operational subject to track until resolution.\n\nRequired fields:\n- title: short label\n- summary: detailed operational summary (context + goal + success criteria)\n- initialRequest: the triggering request or event, written with as much concrete detail as possible because it becomes immutable after creation\n\nOptional fields:\n- details: supporting context\n- nextSteps: the current follow-up plan\n\nDo not send updatesLog on creation. Historical updates belong in update_subject(...), not here.",
+        description: """
+        Creates a new operational subject.
+
+        Use this to start tracking work that needs follow-up, execution, or closure.
+
+        `initialRequest` is immutable after creation. Use `update_subject(...)` to record progress over time.
+        """,
         inputSchema: [
             "type": .string("object"),
             "properties": .object([
