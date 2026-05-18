@@ -20,26 +20,31 @@ struct ClientVoiceScreen: View {
                     .font(.callout)
             }
 
-            if !pendingAsks.isEmpty {
-                pendingPanel
-            }
-
-            List {
-                Section("History") {
-                    ForEach(historyEvents) { event in
-                        Group {
-                            if event.kind == .ask {
-                                askRow(event, showAnswer: true)
-                            } else {
-                                speakRow(event)
-                            }
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 14) {
+                    if events.isEmpty {
+                        emptyState
+                    } else {
+                        // Preserve the original order while presenting each record as a chat bubble.
+                        ForEach(events) { event in
+                            chatEntry(event)
                         }
-                        .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
-                        .listRowSeparator(.hidden)
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 4)
             }
-            .padding(.top, 6)
+            .background(
+                LinearGradient(
+                    colors: [
+                        Color(.windowBackgroundColor),
+                        Color(.controlBackgroundColor).opacity(0.78)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
         .padding(12)
         .task {
@@ -87,168 +92,193 @@ struct ClientVoiceScreen: View {
         }
     }
 
-    private var pendingAsks: [ClientVoiceEvent] {
-        events.filter { $0.kind == .ask && $0.askStatus == .pending }
+    private var emptyState: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("No client voice history yet.")
+                .font(.headline)
+            Text("Speak or ask something from the voice client and the conversation will appear here as chat bubbles.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
     }
 
-    private var historyEvents: [ClientVoiceEvent] {
-        events.filter { $0.kind != .ask || $0.askStatus != .pending }
-    }
-
-    private var pendingPanel: some View {
-        GroupBox {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 8) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.yellow)
-                    Text("Pending response")
-                        .font(.headline)
-                    Spacer()
-                }
-
-                ForEach(pendingAsks) { event in
-                    pendingAskCard(event)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+    @ViewBuilder
+    private func chatEntry(_ event: ClientVoiceEvent) -> some View {
+        switch event.kind {
+        case .speak:
+            speakBubble(event)
+        case .ask:
+            askBubble(event)
         }
     }
 
     @ViewBuilder
-    private func pendingAskCard(_ event: ClientVoiceEvent) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                iconLabel(title: "Ask", systemImage: "questionmark.circle.fill")
-                Spacer()
-                Button {
-                    Task { await replay(event) }
-                } label: {
-                    Image(systemName: "play.circle")
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-                .help("Play again")
-                .disabled(isWorking || (event.prompt ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            }
+    private func speakBubble(_ event: ClientVoiceEvent) -> some View {
+        let text = (event.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
 
-            Text(event.prompt ?? "")
-                .font(.body)
-
-            HStack(spacing: 10) {
-                TextField("Type the client's response", text: Binding(
-                    get: { pendingAnswerById[event.id, default: ""] },
-                    set: { pendingAnswerById[event.id] = $0 }
-                ))
-                .textFieldStyle(.roundedBorder)
-                .submitLabel(.send)
-                .onSubmit {
-                    Task { await submitAnswer(event) }
-                }
-
-                Button {
-                    Task { await submitAnswer(event) }
-                } label: {
-                    Text("Submit")
-                }
-                .disabled(isWorking || pendingAnswerById[event.id, default: ""].trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                .keyboardShortcut(.defaultAction)
-            }
-        }
-        .padding(12)
-        .background(Color.yellow.opacity(0.10), in: RoundedRectangle(cornerRadius: 10))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(Color.yellow.opacity(0.35))
-        )
-    }
-
-    @ViewBuilder
-    private func speakRow(_ event: ClientVoiceEvent) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                iconLabel(title: "Speak", systemImage: "speaker.wave.2.fill")
-                Spacer()
-                Button {
-                    Task { await replay(event) }
-                } label: {
-                    Image(systemName: "play.circle")
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-                .help("Play again")
-                .disabled(isWorking || (event.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            }
-
-            Text(event.text ?? "")
-                .font(.body)
-        }
-        .padding(.vertical, 8)
-    }
-
-    @ViewBuilder
-    private func askRow(_ event: ClientVoiceEvent, showAnswer: Bool) -> some View {
-        let isLost = event.askStatus == .lost
-        let content = askRowContent(event, showAnswer: showAnswer, isLost: isLost)
-
-        if isLost {
-            content
-                .padding(10)
-                .background(Color.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.orange.opacity(0.30))
+        HStack {
+            VStack(alignment: .leading, spacing: 8) {
+                bubbleHeader(
+                    title: "Assistant",
+                    systemImage: "speaker.wave.2.fill",
+                    trailing: AnyView(replayButton(for: event, text: text))
                 )
-        } else {
-            content
+
+                Text(text.isEmpty ? " " : text)
+                    .font(.body)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(12)
+            .frame(maxWidth: 480, alignment: .leading)
+            .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color.accentColor.opacity(0.20))
+            )
+
+            Spacer(minLength: 32)
+        }
+        .padding(.horizontal, 2)
+    }
+
+    @ViewBuilder
+    private func askBubble(_ event: ClientVoiceEvent) -> some View {
+        let isLost = event.askStatus == .lost
+        let prompt = (event.prompt ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let transcript = (event.transcript ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let pendingDraft = pendingAnswerById[event.id, default: ""].trimmingCharacters(in: .whitespacesAndNewlines)
+
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                VStack(alignment: .leading, spacing: 8) {
+                    bubbleHeader(
+                        title: "Assistant",
+                        systemImage: "questionmark.circle.fill",
+                        isLost: isLost,
+                        trailing: AnyView(replayButton(for: event, text: prompt))
+                    )
+
+                    Text(prompt.isEmpty ? " " : prompt)
+                        .font(.body)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding(12)
+                .frame(maxWidth: 480, alignment: .leading)
+                .background(
+                    (isLost ? Color.orange.opacity(0.10) : Color.accentColor.opacity(0.12)),
+                    in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(isLost ? Color.orange.opacity(0.30) : Color.accentColor.opacity(0.20))
+                )
+
+                Spacer(minLength: 32)
+            }
+            .padding(.horizontal, 2)
+
+            if !transcript.isEmpty {
+                HStack {
+                    Spacer(minLength: 32)
+
+                    // Incoming answers stay right-aligned to read like a reply from the client.
+                    VStack(alignment: .leading, spacing: 6) {
+                        bubbleHeader(title: "Client", systemImage: "person.fill")
+
+                        Text(transcript)
+                            .font(.body)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .padding(12)
+                    .frame(maxWidth: 420, alignment: .leading)
+                    .background(Color.green.opacity(0.12), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(Color.green.opacity(0.20))
+                    )
+                }
+                .padding(.horizontal, 2)
+            } else if event.askStatus == .pending {
+                HStack {
+                    Spacer(minLength: 32)
+
+                    // Pending asks keep the reply field attached to the question itself.
+                    VStack(alignment: .leading, spacing: 10) {
+                        bubbleHeader(title: "Waiting for client response", systemImage: "clock.arrow.circlepath")
+
+                        HStack(spacing: 10) {
+                            TextField("Type the client's response", text: Binding(
+                                get: { pendingAnswerById[event.id, default: ""] },
+                                set: { pendingAnswerById[event.id] = $0 }
+                            ))
+                            .textFieldStyle(.roundedBorder)
+                            .submitLabel(.send)
+                            .onSubmit {
+                                Task { await submitAnswer(event) }
+                            }
+
+                            Button {
+                                Task { await submitAnswer(event) }
+                            } label: {
+                                Text("Submit")
+                            }
+                            .disabled(isWorking || pendingDraft.isEmpty)
+                            .keyboardShortcut(.defaultAction)
+                        }
+                    }
+                    .padding(12)
+                    .frame(maxWidth: 420, alignment: .leading)
+                    .background(Color.yellow.opacity(0.10), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(Color.yellow.opacity(0.35))
+                    )
+                }
+                .padding(.horizontal, 2)
+            }
+        }
+    }
+
+    private func bubbleHeader(title: String, systemImage: String, isLost: Bool = false, trailing: AnyView? = nil) -> some View {
+        HStack(spacing: 8) {
+            HStack(spacing: 5) {
+                Image(systemName: systemImage)
+                    .font(.caption.weight(.semibold))
+                Text(title)
+                    .font(.caption.weight(.semibold))
+            }
+            .foregroundStyle(.secondary)
+
+            if isLost {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.orange)
+                    .help("Essa chamada foi perdida")
+                    .accessibilityLabel("Essa chamada foi perdida")
+            }
+
+            Spacer()
+
+            if let trailing {
+                trailing
+            }
         }
     }
 
     @ViewBuilder
-    private func askRowContent(_ event: ClientVoiceEvent, showAnswer: Bool, isLost: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                iconLabel(title: "Ask", systemImage: "questionmark.circle.fill")
-
-                if isLost {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.orange)
-                        .help("Essa chamada foi perdida")
-                        .accessibilityLabel("Essa chamada foi perdida")
-                }
-
-                Spacer()
-                Button {
-                    Task { await replay(event) }
-                } label: {
-                    Image(systemName: "play.circle")
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-                .help("Play again")
-                .disabled(isWorking || (event.prompt ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            }
-
-            Text(event.prompt ?? "")
-                .font(.body)
-
-            if showAnswer, let transcript = event.transcript, !transcript.isEmpty {
-                Text("Response: \(transcript)")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
+    private func replayButton(for event: ClientVoiceEvent, text: String) -> some View {
+        Button {
+            Task { await replay(event) }
+        } label: {
+            Image(systemName: "play.circle")
+                .foregroundStyle(.secondary)
         }
-        .padding(.vertical, 8)
-    }
-
-    private func iconLabel(title: String, systemImage: String) -> some View {
-        HStack(spacing: 5) {
-            Image(systemName: systemImage)
-                .font(.caption.weight(.semibold))
-            Text(title)
-                .font(.caption.weight(.semibold))
-        }
-        .foregroundStyle(.secondary)
+        .buttonStyle(.plain)
+        .help("Play again")
+        .disabled(isWorking || text.isEmpty)
     }
 
     private func reload() async {
