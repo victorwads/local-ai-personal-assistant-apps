@@ -86,10 +86,14 @@ struct MessageRow: View {
             }
         }()
 
-        Text(label)
-            .font(.caption2.weight(.semibold))
-            .foregroundStyle(message.origin == .assistant ? Color.blue : Color.secondary)
-            .help("Origin only applies to outgoing messages. assistant = sent by MCP tool; human = typed by you; unknown = not inferred.")
+        HStack(spacing: 4) {
+            Image(systemName: originIcon)
+                .font(.caption2.weight(.semibold))
+            Text(label)
+                .font(.caption2.weight(.semibold))
+        }
+        .foregroundStyle(originColor)
+        .help("Origin only applies to outgoing messages. assistant = sent by MCP tool; human = typed by you; unknown = not inferred.")
     }
 
     private var backgroundColor: Color {
@@ -246,6 +250,28 @@ struct MessageRow: View {
             return "checkmark.seal"
         case .unknown:
             return "questionmark.circle"
+        }
+    }
+
+    private var originIcon: String {
+        switch message.origin {
+        case .assistant:
+            return "gearshape.2.fill"
+        case .human:
+            return "person.fill"
+        case .unknown:
+            return "questionmark.circle"
+        }
+    }
+
+    private var originColor: Color {
+        switch message.origin {
+        case .assistant:
+            return .blue
+        case .human:
+            return .secondary
+        case .unknown:
+            return .secondary
         }
     }
 
