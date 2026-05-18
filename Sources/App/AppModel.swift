@@ -63,6 +63,9 @@ final class AppModel: ObservableObject {
     let whatsAppWebBridge = WhatsAppWebBridge()
     lazy var whatsAppPollingOrchestrator = WhatsAppPollingOrchestrator(
         memoryStore: memoryStore,
+        isBlocked: { [weak self] conversationName in
+            self?.isBlocked(conversationName) ?? false
+        },
         appendLog: { [weak self] message, level in
             self?.appendLog(message, level: level)
         }

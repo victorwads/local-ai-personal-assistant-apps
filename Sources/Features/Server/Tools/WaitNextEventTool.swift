@@ -35,32 +35,54 @@ struct WaitNextEventTool: MCPToolHandler {
                 ]))
             }
 
-            let consumed = await MainActor.run {
-                context.memoryStore.consumeUnreadMessages(chatId: nil)
+            let unreadMessages = await MainActor.run {
+                context.memoryStore.unreadMessages(chatId: nil)
             }
-            if !consumed.isEmpty {
-                let grouped = Dictionary(grouping: consumed, by: \.chatId)
-                var events: [JSONValue] = []
-                for chatId in grouped.keys.sorted() {
-                    guard grouped[chatId]?.isEmpty == false else {
-                        continue
-                    }
+            let grouped = Dictionary(grouping: unreadMessages, by: \.chatId)
+            var events: [JSONValue] = []
+            for chatId in grouped.keys.sorted() {
+                guard let messages = grouped[chatId], !messages.isEmpty else {
+                    continue
+                }
 
-                    let chat = await MainActor.run {
-                        context.memoryStore.chatState(for: chatId)?.chat
-                            ?? context.memoryStore.conversation(for: chatId)
-                    }
+                let chat = await MainActor.run {
+                    context.memoryStore.chatState(for: chatId)?.chat
+                        ?? context.memoryStore.conversation(for: chatId)
+                }
 
+                if let chat, context.isBlocked(chat.name) {
+                    continue
+                }
+
+                await MainActor.run {
+                    context.memoryStore.markMessagesHandled(messageIds: Set(messages.map(\.id)), chatId: chatId)
+                }
+
+                if let chat {
                     events.append(
                         .object([
                             "type": .string("chat_messages"),
-                            "chat": chat.map { .object(["id": .string($0.id), "name": .string($0.name)]) } ?? .null,
-                            "chatId": chat == nil ? .string(chatId) : .null
+                            "chat": .object([
+                                "id": .string(chat.id),
+                                "name": .string(chat.name)
+                            ]),
+                            "chatId": .null
+                        ])
+                        .pruningNulls()
+                    )
+                } else {
+                    events.append(
+                        .object([
+                            "type": .string("chat_messages"),
+                            "chat": .null,
+                            "chatId": .string(chatId)
                         ])
                         .pruningNulls()
                     )
                 }
+            }
 
+            if !events.isEmpty {
                 return .success(.object([
                     "timedOut": .bool(false),
                     "events": .array(events)

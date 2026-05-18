@@ -108,7 +108,7 @@ Isso controla melhor o modo de uso entre automação e interação manual, além
 
 ---
 
-## 4) Configuração de seletores via YAML com auto-update
+## 4) Mapeamento do parsing do WhatsApp Web via YAML com auto-update
 
 Valor: `V4 - Alto`
 Risco de Desenvolvimento: `R4 - Alto`
@@ -116,20 +116,27 @@ Risco da Feature: `R4 - Alto`
 Score de Execução: `0.40`
 
 **Descrição**  
-Externalizar os seletores e IDs usados no parse do WhatsApp Web para um arquivo `YAML` versionado. Esse arquivo deve ser bundlado no app como padrão, mas o runtime pode baixar uma versão mais recente via uma URL configurável nas Settings. Se a URL estiver vazia, o app usa apenas o `YAML` embutido e não tenta atualizar.
+Extrair do código atual todo o mapeamento usado para interpretar o WhatsApp Web e mover esse conhecimento para um arquivo `YAML` versionado. Isso inclui seletores, caminhos relativos, alternativas de match, hooks de JavaScript quando existirem e a estrutura hierárquica de leitura da tela. O `YAML` deve ser bundlado no app como padrão, mas o runtime pode baixar uma versão mais recente via uma URL configurável nas Settings. Se a URL estiver vazia, o app usa apenas o `YAML` embutido e não tenta atualizar.
 
 **Dependências**  
 - `Nenhuma`
 
 **Regras desejadas**  
 - O `YAML` precisa carregar metadados como data da versão e versão do schema.
+- O app só deve tentar atualizar o `YAML` no momento em que o servidor inicia ou o app abre.
+- Se a URL de atualização não estiver configurada, não deve haver tentativa de fetch.
+- Se a versão do schema do `YAML` remoto for incompatível com a versão esperada pelo app, a atualização deve ser ignorada.
 - Enquanto a versão do schema for compatível, o app pode atualizar só o `YAML` sem exigir atualização do binário.
 - Se o schema mudar, a atualização precisa ser feita no app nativo.
-- Toda a lógica de parsing atual do WhatsApp Web deve deixar de depender de IDs hardcoded espalhados no código e passar a consultar essa configuração centralizada.
-- O `YAML` deve permitir múltiplas alternativas por seletor, para cobrir mudanças de DOM/HTML sem quebrar o fluxo.
+- Toda a lógica de parsing atual do WhatsApp Web deve deixar de depender de valores hardcoded espalhados no código e passar a consultar essa configuração centralizada.
+- O código não deve ter fallback silencioso para outros seletores fora do `YAML`; se o arquivo faltar ou estiver inválido, o fluxo correspondente não deve funcionar.
+- O `YAML` deve permitir múltiplas alternativas por ponto de leitura, para cobrir mudanças de DOM/HTML sem quebrar o fluxo.
+- O formato precisa representar relações hierárquicas, como lista de chats, row de chat e seletores relativos dentro da row.
+- Parte das chaves estruturais pode continuar hardcoded no código, mas o valor de cada chave precisa vir do `YAML`.
+- O modelo deve acomodar tanto seletores CSS/DOM quanto buscas baseadas em JavaScript ou outro mecanismo já usado hoje no parsing.
 
 **Por que isso entra no backlog**  
-Isso reduz o acoplamento com o HTML atual do WhatsApp Web e facilita manter o app funcionando quando a interface mudar, sem precisar lançar uma nova versão para toda alteração pequena de seletor.
+Isso reduz o acoplamento com o HTML atual do WhatsApp Web e facilita manter o app funcionando quando a interface mudar, sem precisar lançar uma nova versão para cada alteração pequena de estrutura, mantendo o comportamento atual do parser, mas com os mapeamentos centralizados e atualizáveis.
 
 ---
 
@@ -301,37 +308,6 @@ Criar uma suíte de testes automatizados em Swift para validar o fluxo real da a
 
 **Por que isso entra no backlog**  
 Isso reduz regressões, formaliza o uso do servidor como alvo de testes e dá mais confiança para evoluir a integração sem quebrar o fluxo real do WhatsApp.
-
----
-
-## 11) Visual de chat para a tela de voice client
-
-Valor: `V3 - Médio`
-Risco de Desenvolvimento: `R2 - Baixo`
-Risco da Feature: `R1 - Baixíssimo`
-Score de Execução: `0.75`
-
-**Descrição**  
-Reimaginar a tela de `voice client voice` para exibir os registros em formato de conversa, em vez de uma lista linear simples. A estrutura de dados continua a mesma, com cada linha representando um registro de `voice client`, mas o visual passa a parecer um chat com as mensagens como balões.
-
-**Dependências**  
-- `Nenhuma`
-
-**Comportamento desejado**  
-- Quando for apenas `speak`, a mensagem aparece à esquerda, como fala do assistente para o usuário.
-- Quando houver `ask_to_client` com resposta, a mensagem do assistente aparece à esquerda e a resposta do usuário aparece à direita.
-- Quando for `ask_to_client` sem resposta, a caixa de resposta deve continuar aparecendo logo abaixo da pergunta.
-- Se houver várias perguntas pendentes, elas continuam aparecendo em sequência, sem mudar a lógica atual de agrupamento.
-- A mudança é apenas visual, sem alterar a estrutura de dados ou a ordem funcional dos registros.
-
-**Notas técnicas**  
-- A mudança deve ficar concentrada na camada SwiftUI da `ClientVoiceScreen`, porque hoje a tela já separa `pendingAsks` e `historyEvents` e renderiza com `List`/`Section`.
-- O modelo base já existe em `ClientVoiceEvent`, então a nova apresentação pode reaproveitar `kind`, `prompt`, `text`, `transcript` e `askStatus` sem mudar a persistência.
-- O painel de resposta pendente embaixo da pergunta deve continuar funcionando como hoje; a alteração é de composição visual, não de regra de negócio.
-- Antes de implementar, confirmar se o nome da tela, subviews e estados auxiliares continuam os mesmos, para não acoplar a mudança a arquivos que possam ter sido renomeados.
-
-**Por que isso entra no backlog**  
-Isso melhora bastante a leitura da conversa de voz, deixando a tela mais natural e próxima de um chat real, sem exigir mudança estrutural no fluxo atual.
 
 ---
 

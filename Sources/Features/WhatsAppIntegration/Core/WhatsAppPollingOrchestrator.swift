@@ -4,13 +4,16 @@ import Foundation
 final class WhatsAppPollingOrchestrator {
     private let memoryStore: WhatsAppMemoryStore
     private let appendLog: (String, LogLevel) -> Void
+    private let isBlocked: (String) -> Bool
     private var listSignaturesById: [String: String] = [:]
 
     init(
         memoryStore: WhatsAppMemoryStore,
+        isBlocked: @escaping (String) -> Bool,
         appendLog: @escaping (String, LogLevel) -> Void
     ) {
         self.memoryStore = memoryStore
+        self.isBlocked = isBlocked
         self.appendLog = appendLog
     }
 
@@ -18,17 +21,22 @@ final class WhatsAppPollingOrchestrator {
         do {
             let conversationsBefore = memoryStore.conversations.count
             let conversations = try await provider.parser.listConversations()
-            memoryStore.replaceConversations(conversations)
+            let blockedConversations = conversations.filter { isBlocked($0.name) }
+            for blockedConversation in blockedConversations {
+                memoryStore.removeConversation(id: blockedConversation.id)
+            }
+            let allowedConversations = conversations.filter { !isBlocked($0.name) }
+            memoryStore.replaceConversations(allowedConversations)
             let conversationsAfter = memoryStore.conversations.count
-            let dedupedIncomingCount = Set(conversations.map(\.name)).count
+            let dedupedIncomingCount = Set(allowedConversations.map(\.name)).count
             let conversationDelta = max(0, conversationsAfter - conversationsBefore)
             appendLog(
-                "Polling(\(provider.kind.rawValue)) conversations: incoming=\(conversations.count) (dedupByName=\(dedupedIncomingCount)) storeBefore=\(conversationsBefore) storeAfter=\(conversationsAfter) added=\(conversationDelta).",
+                "Polling(\(provider.kind.rawValue)) conversations: incoming=\(conversations.count) allowed=\(allowedConversations.count) blocked=\(blockedConversations.count) (dedupByName=\(dedupedIncomingCount)) storeBefore=\(conversationsBefore) storeAfter=\(conversationsAfter) added=\(conversationDelta).",
                 .info
             )
             await refreshChangedChats(
                 provider: provider,
-                conversations: conversations,
+                conversations: allowedConversations,
                 messageLimit: messageLimit
             )
         } catch {

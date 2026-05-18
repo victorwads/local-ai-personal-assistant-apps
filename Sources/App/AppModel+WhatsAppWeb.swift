@@ -130,6 +130,10 @@ extension AppModel {
                 chatTitle: selectedChatTitle,
                 capture: capture
             )
+            guard !isBlocked(conversation.name) else {
+                appendLog("Skipped updating blocked WhatsApp Web chat '\(conversation.name)'.", level: .info)
+                return
+            }
             let chatState = makeWhatsAppWebChatState(
                 accountId: account.id,
                 conversation: conversation,

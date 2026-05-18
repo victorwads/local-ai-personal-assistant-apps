@@ -7,8 +7,9 @@ extension AppModel {
                 return
             }
             let migratedPayload = migratePersistedChatHistory(payload)
-            memoryStore.replaceAllChatStates(migratedPayload.chatStatesByChatId)
-            appendLog("Loaded persisted chat history for \(migratedPayload.chatStatesByChatId.count) chats.")
+            let allowedChatStatesByChatId = migratedPayload.chatStatesByChatId.filter { !isBlocked($0.value.chat.name) }
+            memoryStore.replaceAllChatStates(allowedChatStatesByChatId)
+            appendLog("Loaded persisted chat history for \(allowedChatStatesByChatId.count) chats.")
             if migratedPayload != payload {
                 try chatHistoryRepository.save(migratedPayload)
                 appendLog("Migrated persisted chat history to canonical chat IDs.")
