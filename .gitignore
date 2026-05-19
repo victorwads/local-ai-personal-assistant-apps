@@ -12,3 +12,6 @@ build/
 *.dSYM
 .swiftpm/
 Package.resolved
+
+# App icon PNGs are generated from the SVG source via scripts/regenerate_app_icon.sh
+Sources/Assets.xcassets/AppIcon.appiconset/*.png

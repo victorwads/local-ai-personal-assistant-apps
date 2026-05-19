@@ -18,6 +18,17 @@ export TMPDIR="$BUILD_TMP_DIR"
 echo "Sanitizing Swift file endings..."
 "$REPO_DIR/scripts/sanitize_file_endings.sh"
 
+APPICONSET_DIR="$REPO_DIR/Sources/Assets.xcassets/AppIcon.appiconset"
+APPICON_SVG="$REPO_DIR/Sources/Assets.xcassets/BrandIcon.imageset/assistant-app-icon.svg"
+if [ -d "$APPICONSET_DIR" ] && [ -f "$APPICON_SVG" ]; then
+  if ! ls "$APPICONSET_DIR"/*.png >/dev/null 2>&1; then
+    echo "Generating AppIcon PNGs from SVG..."
+    "$REPO_DIR/scripts/regenerate_app_icon.sh" "$APPICON_SVG" "$APPICONSET_DIR"
+  else
+    echo "AppIcon PNGs already present; skipping generation."
+  fi
+fi
+
 TEAM_ID="${DEVELOPMENT_TEAM:-}"
 if [ -z "${TEAM_ID}" ] && [ -f "$DEVELOPMENT_TEAM_FILE" ]; then
   TEAM_ID="$(cat "$DEVELOPMENT_TEAM_FILE" | tr -d '[:space:]')"

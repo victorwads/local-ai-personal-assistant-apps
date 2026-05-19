@@ -29,6 +29,10 @@ targets:
     platform: macOS
     sources:
       - path: Sources
+    resources:
+      - path: "Sources/Assets.xcassets"
+      - path: "plugins/lmstudio/Assistant System prompt-ptBR.md"
+      - path: "plugins/lmstudio/Assistant System prompt.md"
     dependencies:
       - package: swift-sdk
         product: MCP

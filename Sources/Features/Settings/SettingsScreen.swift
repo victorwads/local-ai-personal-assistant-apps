@@ -1,4 +1,3 @@
-import AppKit
 import AVFoundation
 import SwiftUI
 
@@ -295,25 +294,6 @@ struct SettingsScreen: View {
                                     Label("Stop Server", systemImage: "stop.circle")
                                 }
                             }
-                        }
-
-                        Text("Client snippet")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-
-                        TextEditor(text: .constant(appModel.mcpConfigurationSnippet))
-                            .font(.system(.caption, design: .monospaced))
-                            .frame(minHeight: 150)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .stroke(Color.secondary.opacity(0.2))
-                            )
-
-                        Button {
-                            NSPasteboard.general.clearContents()
-                            NSPasteboard.general.setString(appModel.mcpConfigurationSnippet, forType: .string)
-                        } label: {
-                            Label("Copy MCP Snippet", systemImage: "doc.on.doc")
                         }
 
                         Divider()

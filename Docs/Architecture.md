@@ -249,12 +249,12 @@ When the app talks to LM Studio using the streaming API, it can observe events s
 - final response completion
 
 That event stream is useful both for supervision and for future UI surfaces that show what the model is doing in real time.
+The current Server > LM Studio screen already uses the same stream to show live status, output, and session events.
 
 ## Future shape
 
 Likely next steps in the architecture are:
 
-- a dedicated LM Studio control panel
 - a separate humanization pass after reasoning
 - mobile/remote observability
 - more formal session recovery

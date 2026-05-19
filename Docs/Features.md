@@ -58,6 +58,7 @@ This document summarizes the capabilities currently present in the app.
 - configure the MCP host and port
 - control polling
 - manage outgoing-message prefix and signature behavior
+- control LM Studio sessions from inside the app
 - request Accessibility permission
 - inspect logs and debug views
 
@@ -73,7 +74,6 @@ This document summarizes the capabilities currently present in the app.
 
 The next capabilities on the roadmap include:
 
-- LM Studio session control from inside the app
 - remote/mobile operation
 - richer runtime observability
 - automated integration tests

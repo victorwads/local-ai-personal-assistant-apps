@@ -5,12 +5,8 @@ extension AppModel {
         "\(mcpServerHost):\(mcpServerPort)"
     }
 
-    var mcpConfigurationSnippet: String {
-        """
-        [mcp_servers.assistant_whatsapp]
-        enabled = true
-        url = "http://localhost:\(mcpServerPort)/mcp"
-        """
+    var mcpServerMCPURL: URL? {
+        URL(string: "http://\(mcpServerAddress)/mcp")
     }
 
     func updateMCPServerPortText(_ value: String) {

@@ -70,16 +70,7 @@ open AssistantMCPServer.xcodeproj
 
 ## MCP Client
 
-The app shows a ready-to-copy client snippet in Settings.
-
-Default shape:
-
-```toml
-[mcp_servers.assistant_whatsapp]
-enabled = true
-url = "http://localhost:8080/mcp"
-```
-
+The MCP HTTP endpoint is exposed at `http://localhost:8080/mcp` by default.
 If you change the port in the app settings, update the client URL to match.
 
 ## Accessibility
@@ -116,10 +107,9 @@ macOS grants permission to the exact app binary, so the identity may matter afte
 
 The next major steps are:
 
-- LM Studio control from inside the app
+- LM Studio event visualization and richer session supervision
 - post-tool humanization as a separate pass
 - remote/mobile observability and control
-- richer session supervision
 - automated integration tests
 
 These are tracked in the backlog and documented in the companion docs.
