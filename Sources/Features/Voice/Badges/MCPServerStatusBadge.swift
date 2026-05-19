@@ -11,9 +11,14 @@ struct MCPServerStatusBadge: View {
                 .fill(isRunning ? Color.green : Color.red)
                 .frame(width: 8, height: 8)
 
+            Text("MCP:")
+                .font(.caption.weight(.semibold))
+
             Text(address)
                 .font(.caption2.monospaced())
                 .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
@@ -40,4 +45,3 @@ struct MCPServerStatusBadge: View {
     )
     .padding()
 }
-

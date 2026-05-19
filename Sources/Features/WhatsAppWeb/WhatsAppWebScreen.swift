@@ -20,33 +20,16 @@ struct WhatsAppWebScreen: View {
             VStack(spacing: 0) {
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 8) {
-                            Text(account.name)
-                                .font(.headline)
-
-                            Button {
-                                if appModel.isPolling {
-                                    appModel.stopPolling()
-                                } else {
-                                    appModel.startPolling()
-                                }
-                            } label: {
-                                HStack(spacing: 6) {
-                                    Image(systemName: isIntegrationPolling ? "lock.fill" : "lock.open")
-                                    Text(isIntegrationPolling ? "Unlock (stop integration)" : "Lock (resume integration)")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                .foregroundStyle(.secondary)
-                            }
-                            .buttonStyle(.borderless)
-                            .help(isIntegrationPolling
-                                  ? "Unlock: stops polling and switches to a flexible viewport for manual interaction."
-                                  : "Lock: resumes polling and switches back to the fixed viewport for inspection.")
-                        }
                         Text("https://web.whatsapp.com")
                             .font(.caption)
                             .foregroundStyle(.secondary)
+
+                        HStack(spacing: 6) {
+                            Image(systemName: isIntegrationPolling ? "lock.fill" : "lock.open")
+                            Text(isIntegrationPolling ? "Locked (integration running)" : "Unlocked (click the badge to resume integration)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
 
                     Spacer()
@@ -91,12 +74,47 @@ struct WhatsAppWebScreen: View {
 
                 Divider()
 
-                WhatsAppWebView(
-                    webView: appModel.whatsAppWebSessionStore.webView(for: account),
-                    mode: isIntegrationPolling ? .bridgePolling : .interactive,
-                    pollingPageZoom: appModel.whatsAppWebSettings.pageZoom
-                )
+                ZStack {
+                    WhatsAppWebView(
+                        webView: appModel.whatsAppWebSessionStore.webView(for: account),
+                        mode: isIntegrationPolling ? .bridgePolling : .interactive,
+                        pollingPageZoom: appModel.whatsAppWebSettings.pageZoom
+                    )
                     .id(account.id)
+                    .allowsHitTesting(!isIntegrationPolling)
+
+                    if isIntegrationPolling {
+                        Rectangle()
+                            .fill(Color.black.opacity(0.35))
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                        VStack(spacing: 10) {
+                            Image(systemName: "lock.fill")
+                                .font(.system(size: 46, weight: .semibold))
+
+                            Text("Locked")
+                                .font(.title2.weight(.semibold))
+
+                            Text("Stop integration to use this screen.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+
+                            Button {
+                                appModel.stopPolling()
+                            } label: {
+                                Label("Stop Integration", systemImage: "pause.circle")
+                            }
+                            .buttonStyle(.borderedProminent)
+                        }
+                        .padding(18)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .strokeBorder(.white.opacity(0.12), lineWidth: 1)
+                        )
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                 if let snapshot = appModel.selectedWhatsAppWebPageSnapshot {
                     Divider()
@@ -160,6 +178,7 @@ private struct WhatsAppWebView: NSViewRepresentable {
         (container as? WhatsAppWebFitContainer)?.fixedViewportSize = Self.fixedViewportSize
         (container as? WhatsAppWebFitContainer)?.mode = mode
         (container as? WhatsAppWebFitContainer)?.pollingPageZoom = pollingPageZoom
+        (container as? WhatsAppWebFitContainer)?.applyInteractionLock(mode == .bridgePolling)
         container.needsLayout = true
     }
 
@@ -208,6 +227,16 @@ private final class WhatsAppWebFitContainer: NSView {
         webView.setFrameSize(fixedViewportSize)
 
         addSubview(webView)
+
+        // SwiftUI often sets the final size after `makeNSView` returns. Force a first
+        // layout pass on the next runloop so the initial "scale-to-fit" is applied
+        // without requiring a manual window resize.
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.needsLayout = true
+            self.layoutSubtreeIfNeeded()
+            self.applyInteractionLock(self.mode == .bridgePolling)
+        }
     }
 
     @available(*, unavailable)
@@ -250,6 +279,90 @@ private final class WhatsAppWebFitContainer: NSView {
             }
         }
     }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        needsLayout = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.needsLayout = true
+            self.layoutSubtreeIfNeeded()
+            self.applyInteractionLock(self.mode == .bridgePolling)
+        }
+    }
+
+    func applyInteractionLock(_ isLocked: Bool) {
+        if isLocked {
+            webView.evaluateJavaScript(Self.installLockOverlayScript, completionHandler: nil)
+            if webView.window?.firstResponder === webView {
+                webView.window?.makeFirstResponder(nil)
+            }
+        } else {
+            webView.evaluateJavaScript(Self.removeLockOverlayScript, completionHandler: nil)
+        }
+    }
+
+    private static let installLockOverlayScript = """
+    (() => {
+      const overlayId = 'assistant-mcp-lock-overlay';
+      if (document.getElementById(overlayId)) {
+        const existing = document.getElementById(overlayId);
+        existing.focus?.();
+        return true;
+      }
+
+      const overlay = document.createElement('div');
+      overlay.id = overlayId;
+      overlay.tabIndex = 0;
+      overlay.setAttribute('aria-hidden', 'true');
+      overlay.style.position = 'fixed';
+      overlay.style.top = '0';
+      overlay.style.left = '0';
+      overlay.style.width = '100vw';
+      overlay.style.height = '100vh';
+      overlay.style.zIndex = '2147483647';
+      overlay.style.background = 'transparent';
+      overlay.style.pointerEvents = 'auto';
+      overlay.style.cursor = 'not-allowed';
+
+      const stop = (e) => {
+        try {
+          e.preventDefault();
+          e.stopPropagation();
+          if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+        } catch {}
+        return false;
+      };
+
+      const eventTypes = [
+        'click','dblclick','mousedown','mouseup','mousemove','mouseover','mouseenter','mouseleave','mouseout',
+        'contextmenu','wheel','scroll',
+        'keydown','keyup','keypress',
+        'touchstart','touchmove','touchend',
+        'pointerdown','pointerup','pointermove','pointerenter','pointerleave','pointercancel',
+        'dragstart','drag','dragend','drop'
+      ];
+
+      for (const type of eventTypes) {
+        overlay.addEventListener(type, stop, { capture: true, passive: false });
+      }
+
+      const body = document.body || document.documentElement;
+      body.appendChild(overlay);
+      overlay.focus();
+      return true;
+    })();
+    """
+
+    private static let removeLockOverlayScript = """
+    (() => {
+      const overlayId = 'assistant-mcp-lock-overlay';
+      const overlay = document.getElementById(overlayId);
+      if (!overlay) return true;
+      overlay.remove();
+      return true;
+    })();
+    """
 }
 
 #Preview {

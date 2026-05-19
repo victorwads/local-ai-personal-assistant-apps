@@ -7,6 +7,7 @@ struct BridgeStatusBadge: View {
     let whatsappRunning: Bool
     let webSnapshot: WhatsAppWebPageSnapshot?
     let onRequestAccessibilityPermission: () -> Void
+    let onStartPolling: () -> Void
 
     var body: some View {
         if isPolling {
@@ -40,11 +41,26 @@ struct BridgeStatusBadge: View {
                 }
             }
         } else {
-            StatusBadge(
-                title: "WhatsApp paused",
-                state: .paused,
-                help: "Polling is paused. Start polling to resume WhatsApp status updates."
-            )
+            Button(action: onStartPolling) {
+                HStack(spacing: 8) {
+                    Image(systemName: "play.fill")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+
+                    Circle()
+                        .fill(StatusBadgeState.paused.indicatorColor)
+                        .frame(width: 8, height: 8)
+
+                    Text("WhatsApp paused")
+                        .font(.caption.weight(.semibold))
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(StatusBadgeState.paused.backgroundColor)
+                .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .help("Polling is paused. Click to start polling and resume WhatsApp status updates.")
         }
     }
 }
@@ -56,7 +72,8 @@ struct BridgeStatusBadge: View {
         accessibilityTrusted: true,
         whatsappRunning: true,
         webSnapshot: nil,
-        onRequestAccessibilityPermission: {}
+        onRequestAccessibilityPermission: {},
+        onStartPolling: {}
     )
     .padding()
 }
@@ -68,7 +85,8 @@ struct BridgeStatusBadge: View {
         accessibilityTrusted: true,
         whatsappRunning: false,
         webSnapshot: nil,
-        onRequestAccessibilityPermission: {}
+        onRequestAccessibilityPermission: {},
+        onStartPolling: {}
     )
     .padding()
 }
@@ -80,7 +98,8 @@ struct BridgeStatusBadge: View {
         accessibilityTrusted: false,
         whatsappRunning: false,
         webSnapshot: nil,
-        onRequestAccessibilityPermission: {}
+        onRequestAccessibilityPermission: {},
+        onStartPolling: {}
     )
     .padding()
 }

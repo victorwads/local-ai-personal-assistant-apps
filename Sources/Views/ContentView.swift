@@ -44,8 +44,8 @@ struct ContentView: View {
             case .memories: "Memories"
             case .sensitiveData: "Sensitive Data"
             case .clientVoice: "Client Voice"
-            case .whatsAppChats: "WhatsApp"
-            case .whatsAppWebAccount: "WhatsApp Web"
+            case .whatsAppChats: "Chats"
+            case .whatsAppWebAccount: "WebView"
             case .integrationLogs: "Logs"
             case .integrationDebug: "Debug"
             case .serverLogs: "Logs"
@@ -86,7 +86,7 @@ struct ContentView: View {
                 Section("WhatsApp Integration") {
                     sidebarItem(.whatsAppChats)
                     ForEach(appModel.whatsAppWebAccounts) { account in
-                        sidebarItem(.whatsAppWebAccount(account.id), title: account.name)
+                        sidebarItem(.whatsAppWebAccount(account.id))
                     }
                     sidebarItem(.integrationLogs)
                     sidebarItem(.integrationDebug)
@@ -245,6 +245,9 @@ struct ContentView: View {
                 webSnapshot: appModel.selectedWhatsAppWebPageSnapshot,
                 onRequestAccessibilityPermission: {
                     appModel.requestAccessibilityPermission()
+                },
+                onStartPolling: {
+                    appModel.startPolling()
                 }
             )
 
