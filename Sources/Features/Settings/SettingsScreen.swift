@@ -136,7 +136,7 @@ struct SettingsScreen: View {
                                 }
 
                                 // Re-warm the currently selected account so the UI immediately reloads WA Web.
-                                if let selected = appModel.selectedWhatsAppWebAccount {
+                                if whatsAppIntegrationSettings.mode == .web, let selected = appModel.selectedWhatsAppWebAccount {
                                     _ = appModel.whatsAppWebSessionStore.webView(for: selected)
                                 }
 

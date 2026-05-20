@@ -236,6 +236,7 @@ final class AppModel: ObservableObject {
         whatsAppWebSessionStore.setCustomUserAgent(whatsAppWebSettings.effectiveCustomUserAgent)
         whatsAppWebSessionStore.setInspectable(whatsAppWebSettings.isInspectable)
         whatsAppWebSessionStore.setPageZoom(whatsAppWebSettings.pageZoom)
+        whatsAppWebSessionStore.setSessionsEnabled(whatsAppIntegrationSettings.mode == .web)
 
         let resolvedPort = basePort + max(0, profileIndex)
         mcpServerPort = resolvedPort
@@ -353,6 +354,14 @@ final class AppModel: ObservableObject {
             .receive(on: RunLoop.main)
             .sink { [weak self] value in
                 self?.whatsAppWebSessionStore.setPageZoom(value)
+            }
+            .store(in: &cancellables)
+
+        whatsAppIntegrationSettings.$mode
+            .dropFirst()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] mode in
+                self?.whatsAppWebSessionStore.setSessionsEnabled(mode == .web)
             }
             .store(in: &cancellables)
     }
