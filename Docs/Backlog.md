@@ -382,3 +382,68 @@ Expor, no runtime do macOS e também em uma futura interface mobile, uma visuali
 Isso melhora bastante a transparência do runtime, ajuda a diagnosticar o que o agente está fazendo e leva para a interface remota uma visão que hoje só existe no LM Studio.
 
 ---
+
+## 15) Menu do macOS e gerenciamento de janelas
+
+Valor: `V4 - Alto`
+Risco de Desenvolvimento: `R4 - Alto`
+Risco da Feature: `R2 - Baixo`
+Score de Execução: `0.50`
+
+**Descrição**  
+Trabalhar o menu nativo do macOS da aplicação `Assistant Server`, incluindo itens como `File`, `Edit`, `View`, `Window` e `Help`, para organizar melhor o ciclo de vida das janelas e dos perfis. Hoje, quando a janela de profiles é fechada, ela não pode ser reaberta de forma natural, e isso precisa virar um fluxo mais parecido com apps macOS comuns.
+
+**Dependências**  
+- `Nenhuma`
+
+**Comportamento desejado**  
+- Permitir reabrir a janela de `profiles` a partir do menu do app.
+- Definir se fechar a janela de um profile significa realmente encerrar o profile ou apenas esconder/minimizar a janela.
+- Manter o profile rodando em background mesmo quando a janela principal for fechada, se essa for a decisão do fluxo.
+- Separar claramente a ação de fechar janelas da ação de encerrar a aplicação inteira.
+- Entender o comportamento correto ao fechar a última janela: sair do app ou continuar residente no sistema.
+- Restaurar o estado das janelas na próxima abertura do app, reabrindo apenas as janelas que estavam ativas da última vez.
+- Se a janela de `profiles` estava fechada quando o app foi encerrado, ela deve continuar fechada ao voltar; se apenas a janela do profile estava aberta, o app deve restaurar só ela.
+
+**Notas técnicas**  
+- Esse item provavelmente exige revisar a estrutura de `NSApplication`, `NSWindow`, `WindowGroup` e handlers de fechamento para alinhar o comportamento esperado com o padrão macOS.
+- A decisão de “fechar vs esconder” precisa ser consistente com a experiência de profiles e com a existência de uma UI acessível pelo menu.
+- Também pode exigir persistir/restaurar um pequeno estado local de janela ativa por profile, para que a reabertura do app respeite o último layout.
+- Pode ser necessário introduzir um ponto único de navegação para reabrir janelas importantes, em vez de depender apenas do ciclo normal de criação da cena.
+
+**Por que isso entra no backlog**  
+Isso evita que o usuário fique preso fora da interface de profiles e deixa o app mais parecido com um aplicativo macOS normal, com menu, janelas e comportamento de background previsível.
+
+---
+
+## 16) Modo desenvolvedor para esconder ferramentas de debug
+
+Valor: `V3 - Médio`
+Risco de Desenvolvimento: `R3 - Médio`
+Risco da Feature: `R2 - Baixo`
+Score de Execução: `0.46`
+
+**Descrição**  
+Adicionar uma configuração global nas `Settings` chamada `Modo desenvolvedor`, com valor padrão desligado. Quando esse modo estiver off, a aplicação deve esconder itens de debug e ferramentas internas que não fazem parte da experiência normal de uso. Quando estiver on, esses itens voltam a aparecer.
+
+**Dependências**  
+- `Nenhuma`
+
+**Comportamento desejado**  
+- Criar um toggle de `Modo desenvolvedor` nas configurações.
+- Deixar o `Modo desenvolvedor` desativado por padrão.
+- Em `WhatsApp Integration`, ocultar `Logs`, `Debug` e `YAML Tree` quando o modo estiver off, deixando visíveis apenas `Chat` e `WebView`.
+- Em `Server`, ocultar `Logs` quando o modo estiver off, deixando visíveis apenas `Tools` e `LM Studio`.
+- Dentro da `WebView`, ocultar a área de snapshot/debug, incluindo `Capture`, `Refresh Snapshot`, `Update Chat`, `Save Snapshot` e `Open Capture Folders`.
+- Reforçar que esses controles são de debugging e inspeção interna, não parte do fluxo normal de uso.
+
+**Notas técnicas**  
+- Esse item provavelmente pede uma camada central de feature flag/configuração para decidir visibilidade de menus e seções.
+- A decisão de ocultar deve acontecer no nível da navegação ou composição da UI, não apenas desabilitando botões.
+- O estado precisa ser persistido nas settings do app para sobreviver a reinícios.
+- As telas e menus existentes devem ler essa flag de forma consistente, para não mostrar debug em um lugar e esconder em outro.
+
+**Por que isso entra no backlog**  
+Isso limpa a interface principal para uso normal, reduz ruído visual e separa bem o que é operação do que é manutenção/instrumentação interna.
+
+---

@@ -59,7 +59,11 @@ final class WhatsAppWebYAMLExtractionRunner {
           const spec = \(specJSONLiteral);
 
           const pickText = (value) => typeof value === 'string' ? value.trim() : '';
-          const toArray = (value) => Array.isArray(value) ? value : [];
+          const toArray = (value) => {
+            if (Array.isArray(value)) return value;
+            if (typeof value === 'string') return [value];
+            return [];
+          };
           const isObj = (value) => value && typeof value === 'object' && !Array.isArray(value);
 
           const safeOuterHTML = (node) => {
@@ -73,6 +77,14 @@ final class WhatsAppWebYAMLExtractionRunner {
           };
           const safeAttr = (node, name) => {
             try { return node && node.getAttribute ? node.getAttribute(name) : null; } catch { return null; }
+          };
+
+          const evalTextValue = (node, attributeName) => {
+            if (attributeName) {
+              const v = pickText(safeAttr(node, String(attributeName)) || '');
+              return v || null;
+            }
+            return pickText(safeInnerText(node) || safeTextContent(node) || '') || null;
           };
 
           const evalValueFrom = (node, valueFrom) => {
@@ -129,8 +141,7 @@ final class WhatsAppWebYAMLExtractionRunner {
 
           const evalNode = (nodeSpec, root) => {
             const type = String(nodeSpec?.type || 'element');
-            const selectors = nodeSpec?.selectors;
-            const fallback = nodeSpec?.fallback;
+            const selectors = (nodeSpec?.selector != null) ? nodeSpec.selector : nodeSpec?.selectors;
             const extract = isObj(nodeSpec?.extract) ? nodeSpec.extract : {};
             const clipMax = (typeof nodeSpec?.clip_max_chars === 'number') ? nodeSpec.clip_max_chars : null;
 
@@ -158,17 +169,8 @@ final class WhatsAppWebYAMLExtractionRunner {
               return withFound(ok, { ok });
             }
 
-            const resolveRoot = (rootCandidate) => {
-              if (!fallback || !isObj(fallback)) return rootCandidate;
-              const kind = String(fallback.kind || '');
-              if (kind === 'document') return document;
-              // ref is resolved by falling back to document for now.
-              return rootCandidate;
-            };
-
             if (type === 'elements') {
-              const resolvedRoot = resolveRoot(root);
-              const nodes = findMany(resolvedRoot, selectors);
+              const nodes = findMany(root, selectors);
               const limited = nodes.slice(0, 50);
               const items = limited.map((el) => {
                 const children = {};
@@ -185,8 +187,7 @@ final class WhatsAppWebYAMLExtractionRunner {
               return withFound(items.length > 0, { count: items.length, items });
             }
 
-            const resolvedRoot = resolveRoot(root);
-            const found = findOne(resolvedRoot, selectors);
+            const found = findOne(root, selectors);
             if (!found) return withFound(false, { extract: {} });
 
             const children = {};
@@ -195,7 +196,7 @@ final class WhatsAppWebYAMLExtractionRunner {
             }
 
             if (type === 'text') {
-              const value = evalValueFrom(found, nodeSpec?.value_from);
+              const value = evalTextValue(found, nodeSpec?.attribute);
               return withFound(true, { value, extract: children });
             }
             if (type === 'number') {
@@ -204,12 +205,6 @@ final class WhatsAppWebYAMLExtractionRunner {
               const fallbackNumber = (typeof nodeSpec?.fallback_number === 'number') ? nodeSpec.fallback_number : null;
               return withFound(true, { value: n ?? fallbackNumber, extract: children });
             }
-            if (type === 'html') {
-              const html = safeOuterHTML(found);
-              const clipped = clipMax && typeof html === 'string' ? html.slice(0, clipMax) : html;
-              return withFound(true, { html: clipped, extract: children });
-            }
-
             // default: element
             const html = safeOuterHTML(found);
             const clipped = clipMax && typeof html === 'string' ? html.slice(0, clipMax) : html;

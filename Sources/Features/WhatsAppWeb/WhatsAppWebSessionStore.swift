@@ -81,6 +81,19 @@ final class WhatsAppWebSessionStore {
         return webView
     }
 
+    func resetWebsiteData(for account: WhatsAppWebAccount) async {
+        let store = WKWebsiteDataStore(forIdentifier: account.profileIdentifier)
+        let types = WKWebsiteDataStore.allWebsiteDataTypes()
+
+        await withCheckedContinuation { continuation in
+            store.fetchDataRecords(ofTypes: types) { records in
+                store.removeData(ofTypes: types, for: records) {
+                    continuation.resume()
+                }
+            }
+        }
+    }
+
     func removeSession(accountId: UUID) {
         guard let webView = webViewsByAccountId.removeValue(forKey: accountId) else {
             return

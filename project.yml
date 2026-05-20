@@ -32,11 +32,12 @@ targets:
     platform: macOS
     sources:
       - path: Sources
+      - path: "Resources/whatsapp_web_selectors.yaml"
+        buildPhase: resources
     resources:
       - path: "Sources/Assets.xcassets"
-      - path: "plugins/lmstudio/Assistant System prompt-ptBR.md"
       - path: "plugins/lmstudio/Assistant System prompt.md"
-      - path: "Resources/whatsapp_web_selectors.yaml"
+        buildPhase: resources
     dependencies:
       - package: swift-sdk
         product: MCP

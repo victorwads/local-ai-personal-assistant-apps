@@ -62,6 +62,9 @@ extension AppModel {
             return
         }
 
+        // Persist last intent: if the user starts polling anywhere, next launch should also start polling.
+        whatsAppPollingStateRepository.savePollingEnabled(true)
+
         isPolling = true
         appendLog("Started WhatsApp polling.")
 
@@ -75,6 +78,9 @@ extension AppModel {
     }
 
     func stopPolling() {
+        // Persist last intent: if the user stops polling anywhere, next launch should stay paused.
+        whatsAppPollingStateRepository.savePollingEnabled(false)
+
         pollingTask?.cancel()
         pollingTask = nil
         isPolling = false

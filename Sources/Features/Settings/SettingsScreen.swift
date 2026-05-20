@@ -98,6 +98,40 @@ struct SettingsScreen: View {
                         Text("Web is the default. Desktop (Accessibility) remains available as a fallback.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
+
+                        Divider().padding(.vertical, 2)
+
+                        Text("Maintenance")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+
+                        Text("Use this if WhatsApp Web gets stuck on a bad redirect or login loop. This will clear cookies and website data for all WhatsApp Web accounts on this profile.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+
+                        Button(role: .destructive) {
+                            Task { @MainActor in
+                                if appModel.isPolling {
+                                    appModel.stopPolling()
+                                }
+
+                                let accounts = appModel.whatsAppWebAccounts
+                                for account in accounts {
+                                    await appModel.whatsAppWebSessionStore.resetWebsiteData(for: account)
+                                    appModel.whatsAppWebSessionStore.removeSession(accountId: account.id)
+                                    appModel.whatsAppWebPageSnapshotsByAccountId[account.id] = nil
+                                }
+
+                                // Re-warm the currently selected account so the UI immediately reloads WA Web.
+                                if let selected = appModel.selectedWhatsAppWebAccount {
+                                    _ = appModel.whatsAppWebSessionStore.webView(for: selected)
+                                }
+
+                                appModel.appendLog("Cleared WhatsApp Web website data for \(accounts.count) account(s).", level: .warning)
+                            }
+                        } label: {
+                            Label("Reset WhatsApp Web Session", systemImage: "trash")
+                        }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }

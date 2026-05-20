@@ -93,12 +93,18 @@ struct ContentView: View {
 
                 Section("WhatsApp Integration") {
                     sidebarItem(.whatsAppChats)
-                    ForEach(appModel.whatsAppWebAccounts) { account in
-                        sidebarItem(.whatsAppWebAccount(account.id))
+
+                    if appModel.whatsAppIntegrationSettings.mode == .web {
+                        ForEach(appModel.whatsAppWebAccounts) { account in
+                            sidebarItem(.whatsAppWebAccount(account.id))
+                        }
+                        sidebarItem(.integrationYAMLTree, title: "YAML Tree")
+                    } else {
+                        sidebarItem(.integrationDebug, title: "Accessibility Tree")
                     }
+
+                    // Logs should always be last in this section.
                     sidebarItem(.integrationLogs)
-                    sidebarItem(.integrationDebug)
-                    sidebarItem(.integrationYAMLTree)
                 }
 
                 Section("Server") {
@@ -120,6 +126,22 @@ struct ContentView: View {
                 Divider()
                 selectedDetailView
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .onChange(of: appModel.whatsAppIntegrationSettings.mode) { _, newMode in
+            // If the user switches integration mode, ensure the currently selected screen still exists
+            // in the sidebar for that mode.
+            switch newMode {
+            case .desktopAX:
+                if case .whatsAppWebAccount = selectedScreen {
+                    selectedScreen = .whatsAppChats
+                } else if selectedScreen == .integrationYAMLTree {
+                    selectedScreen = .whatsAppChats
+                }
+            case .web:
+                if selectedScreen == .integrationDebug {
+                    selectedScreen = .whatsAppChats
+                }
             }
         }
     }

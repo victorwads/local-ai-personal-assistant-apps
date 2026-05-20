@@ -164,6 +164,7 @@ final class AppModel: ObservableObject {
     let chatHistoryRepository: ChatHistoryRepository
     let chatListSignaturesRepository: ChatListSignaturesRepository
     let conversationAccessRepository: ConversationAccessRepository
+    let whatsAppPollingStateRepository: WhatsAppPollingStateRepository
     var chatHistoryListenerId: UUID?
     var chatHistoryPersistTask: Task<Void, Never>?
 
@@ -194,6 +195,7 @@ final class AppModel: ObservableObject {
         chatHistoryRepository = ChatHistoryRepository(defaults: profileDefaults)
         chatListSignaturesRepository = ChatListSignaturesRepository(defaults: profileDefaults)
         conversationAccessRepository = ConversationAccessRepository(defaults: profileDefaults)
+        whatsAppPollingStateRepository = WhatsAppPollingStateRepository(defaults: profileDefaults)
 
         let keychainService = "dev.wads.AssistantMCPServer" + (profile.isDefault ? "" : ".\(profile.id)")
         sensitiveDataRepository = SensitiveDataRepository(
@@ -267,9 +269,14 @@ final class AppModel: ObservableObject {
             }
             refreshStatus()
             startLiveStatusMonitoring()
+            let shouldStartPolling = whatsAppPollingStateRepository.loadPollingEnabled(defaultValue: true)
             Task {
                 await startMCPServer()
-                startPolling()
+                if shouldStartPolling {
+                    startPolling()
+                } else {
+                    appendLog("Polling is paused (restored from last session).", level: .info)
+                }
             }
 
         case .home:
