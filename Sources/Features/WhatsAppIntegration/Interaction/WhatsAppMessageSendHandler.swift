@@ -2,7 +2,7 @@ import Foundation
 
 @MainActor
 struct WhatsAppMessageSendHandler {
-    private let accessibilityMap = WhatsAppAccessibilityMap()
+    private let accessibilityMap = WhatsAppAccessibilityMap.shared
 
     private func normalizeComposeTextForComparison(_ text: String) -> String {
         text
@@ -25,14 +25,9 @@ struct WhatsAppMessageSendHandler {
     }
 
     func sendMessage(_ text: String, using accessibility: AccessibilityService) throws {
-        // Fast path: this container path is stable in WhatsApp Desktop and avoids a full AX snapshot per message.
-        var composeContainerPath: [Int] = [0, 0, 0, 4, 1]
-        if (try? accessibility.readComposeValue(in: composeContainerPath)) == nil {
-            let liveSnapshot = try accessibility.captureWhatsAppSnapshot(maxDepth: 14)
-            guard let resolved = accessibilityMap.composeContainer(in: liveSnapshot.rootNode)?.accessibilityPath else {
-                throw AccessibilityError.nodeNotFound
-            }
-            composeContainerPath = resolved
+        let liveSnapshot = try accessibility.captureWhatsAppSnapshot(maxDepth: 14)
+        guard let composeContainerPath = accessibilityMap.composeContainer(in: liveSnapshot.rootNode)?.accessibilityPath else {
+            throw AccessibilityError.nodeNotFound
         }
 
         try accessibility.sendText(text, inComposeContainer: composeContainerPath)

@@ -34,6 +34,8 @@ targets:
       - path: Sources
       - path: "Resources/whatsapp_web_selectors.yaml"
         buildPhase: resources
+      - path: "Resources/whatsapp_native_selectors.yaml"
+        buildPhase: resources
     resources:
       - path: "Sources/Assets.xcassets"
       - path: "plugins/lmstudio/Assistant System prompt.md"

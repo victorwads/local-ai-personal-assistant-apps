@@ -1,9 +1,8 @@
 import SwiftUI
-import WebKit
 
-struct WhatsAppWebYAMLTreeTesterScreen: View {
+struct WhatsAppNativeYAMLTreeTesterScreen: View {
     @EnvironmentObject private var appModel: AppModel
-    @StateObject private var model = WhatsAppWebYAMLTreeTesterViewModel()
+    @StateObject private var model = WhatsAppNativeYAMLTreeTesterViewModel()
 
     var body: some View {
         HSplitView {
@@ -43,7 +42,7 @@ struct WhatsAppWebYAMLTreeTesterScreen: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
-                .disabled(appModel.selectedWhatsAppWebAccount == nil || model.isRunning)
+                .disabled(model.isRunning)
 
                 Button {
                     model.clearExecutionResults()
@@ -119,20 +118,14 @@ struct WhatsAppWebYAMLTreeTesterScreen: View {
 
     @MainActor
     private func runTest() async {
-        guard let account = appModel.selectedWhatsAppWebAccount else {
-            model.setError("No WhatsApp Web account selected.")
-            return
-        }
-        let webView = appModel.whatsAppWebSessionStore.webView(for: account)
-        await model.runTest(webView: webView)
+        await model.runTest(accessibility: appModel.accessibility)
     }
 }
 
 @MainActor
-final class WhatsAppWebYAMLTreeTesterViewModel: ObservableObject {
+final class WhatsAppNativeYAMLTreeTesterViewModel: ObservableObject {
     @Published var yamlText: String = ""
     @Published var isRunning = false
-    @Published var lastError: String?
     @Published var parseError: String?
     @Published var structureRoot: YAMLStructureNode?
     @Published var executionRoot: YAMLExecutionNode?
@@ -140,7 +133,7 @@ final class WhatsAppWebYAMLTreeTesterViewModel: ObservableObject {
     let expansionState = YAMLTreeExpansionState()
 
     private var didLoadBundled = false
-    private let runner = WhatsAppWebYAMLExtractionRunner()
+    private let runner = WhatsAppNativeYAMLExtractionRunner()
 
     func loadBundledYAMLIfNeeded() async {
         guard !didLoadBundled else { return }
@@ -150,16 +143,15 @@ final class WhatsAppWebYAMLTreeTesterViewModel: ObservableObject {
 
     func loadBundledYAML(force: Bool) async {
         guard force || yamlText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        guard let url = Bundle.main.url(forResource: "whatsapp_web_selectors", withExtension: "yaml"),
+        guard let url = Bundle.main.url(forResource: "whatsapp_native_selectors", withExtension: "yaml"),
               let data = try? Data(contentsOf: url),
               let text = String(data: data, encoding: .utf8) else {
-            setError("Could not load bundled YAML resource `whatsapp_web_selectors.yaml`.")
+            parseError = "Could not load bundled YAML resource `whatsapp_native_selectors.yaml`."
             return
         }
 
         yamlText = text
         reparseYAML()
-        lastError = nil
     }
 
     func reparseYAML() {
@@ -173,24 +165,23 @@ final class WhatsAppWebYAMLTreeTesterViewModel: ObservableObject {
         }
     }
 
-    func runTest(webView: WKWebView) async {
+    func runTest(accessibility: AccessibilityService) async {
         isRunning = true
         defer { isRunning = false }
-        lastError = nil
         executionRoot = nil
 
         do {
             let tree = try YAMLTree.parse(yaml: yamlText)
-            let result = try await runner.run(yamlTree: tree, webView: webView)
+            let snapshot = try accessibility.captureWhatsAppSnapshot(maxDepth: 14)
+            let result = try runner.run(yamlTree: tree, snapshotRoot: snapshot.rootNode)
             executionRoot = YAMLExecutionNode.from(any: result.tree, title: "root", path: "root")
         } catch {
-            setError(error.localizedDescription)
+            parseError = error.localizedDescription
         }
     }
 
     func clearExecutionResults() {
         executionRoot = nil
-        lastError = nil
     }
 
     func requestExpandAll() {
@@ -200,9 +191,4 @@ final class WhatsAppWebYAMLTreeTesterViewModel: ObservableObject {
     func requestCollapseAll() {
         expansionState.requestCollapseAll()
     }
-
-    func setError(_ message: String) {
-        lastError = message
-    }
 }
-

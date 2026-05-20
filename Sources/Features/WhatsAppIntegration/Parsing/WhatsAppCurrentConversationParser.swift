@@ -9,7 +9,7 @@ struct WhatsAppCurrentConversationState: Equatable {
 }
 
 struct WhatsAppCurrentConversationParser {
-    private let accessibilityMap = WhatsAppAccessibilityMap()
+    private let accessibilityMap = WhatsAppAccessibilityMap.shared
 
     func parse(from accessibilityObject: AccessibilityObject, selectedChatName: String?, limit: Int) -> WhatsAppCurrentConversationState {
         let inferredChatName = inferChatName(from: accessibilityObject.root) ?? selectedChatName

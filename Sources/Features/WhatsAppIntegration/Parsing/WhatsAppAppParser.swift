@@ -38,8 +38,8 @@ struct WhatsAppAppParser {
         let flattened = root.flattened
         let nodesWithFrame = flattened.filter { $0.frame != nil }
         let nodesWithText = flattened.filter { !WhatsAppParserSupport.normalizedUniqueTexts($0.textFragments).isEmpty }
-        let chatList = WhatsAppAccessibilityMap().chatList(in: root)
-        let messageList = WhatsAppAccessibilityMap().messageList(in: root)
+        let chatList = WhatsAppAccessibilityMap.shared.chatList(in: root)
+        let messageList = WhatsAppAccessibilityMap.shared.messageList(in: root)
         let conversationCandidates = conversationListReader.candidates(from: accessibilityObject)
         let parsed = parse(snapshot: snapshot)
 

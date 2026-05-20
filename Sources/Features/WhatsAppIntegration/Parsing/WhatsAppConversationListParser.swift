@@ -1,7 +1,7 @@
 import Foundation
 
 struct WhatsAppConversationListParser {
-    private let accessibilityMap = WhatsAppAccessibilityMap()
+    private let accessibilityMap = WhatsAppAccessibilityMap.shared
 
     func parseConversations(from accessibilityObject: AccessibilityObject) -> [ConversationSummary] {
         let root = accessibilityObject.root
