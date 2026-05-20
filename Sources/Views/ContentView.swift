@@ -52,7 +52,7 @@ struct ContentView: View {
             case .whatsAppWebAccount: "WebView"
             case .integrationLogs: "Logs"
             case .integrationDebug: "Debug"
-            case .integrationYAMLTree: "YML Tree"
+            case .integrationYAMLTree: "YAML Tree"
             case .serverLogs: "Logs"
             case .lmStudio: "LM Studio"
             case .serverTools: "Tools"
@@ -98,17 +98,26 @@ struct ContentView: View {
                         ForEach(appModel.whatsAppWebAccounts) { account in
                             sidebarItem(.whatsAppWebAccount(account.id))
                         }
-                        sidebarItem(.integrationYAMLTree, title: "YAML Tree")
                     } else {
-                        sidebarItem(.integrationDebug, title: "Accessibility Tree")
+                        if appModel.developerModeSettings.isEnabled {
+                            sidebarItem(.integrationDebug, title: "Accessibility Tree")
+                        }
                     }
 
-                    // Logs should always be last in this section.
-                    sidebarItem(.integrationLogs)
+                    if appModel.developerModeSettings.isEnabled {
+                        sidebarItem(.integrationYAMLTree, title: "YAML Tree")
+                    }
+
+                    if appModel.developerModeSettings.isEnabled {
+                        // Logs should always be last in this section.
+                        sidebarItem(.integrationLogs)
+                    }
                 }
 
                 Section("Server") {
-                    sidebarItem(.serverLogs)
+                    if appModel.developerModeSettings.isEnabled {
+                        sidebarItem(.serverLogs)
+                    }
                     sidebarItem(.lmStudio)
                     sidebarItem(.serverTools)
                 }
@@ -135,13 +144,23 @@ struct ContentView: View {
             case .desktopAX:
                 if case .whatsAppWebAccount = selectedScreen {
                     selectedScreen = .whatsAppChats
-                } else if selectedScreen == .integrationYAMLTree {
-                    selectedScreen = .whatsAppChats
                 }
             case .web:
                 if selectedScreen == .integrationDebug {
                     selectedScreen = .whatsAppChats
                 }
+            }
+        }
+        .onChange(of: appModel.developerModeSettings.isEnabled) { _, isEnabled in
+            guard !isEnabled else { return }
+
+            switch selectedScreen {
+            case .integrationLogs, .integrationDebug, .integrationYAMLTree:
+                selectedScreen = .whatsAppChats
+            case .serverLogs:
+                selectedScreen = .lmStudio
+            default:
+                break
             }
         }
     }
@@ -177,7 +196,8 @@ struct ContentView: View {
                     inputLockSettings: appModel.inputLockSettings,
                     mcpSendPrefixSettings: appModel.mcpSendPrefixSettings,
                     whatsAppWebSettings: appModel.whatsAppWebSettings,
-                    whatsAppIntegrationSettings: appModel.whatsAppIntegrationSettings
+                    whatsAppIntegrationSettings: appModel.whatsAppIntegrationSettings,
+                    developerModeSettings: appModel.developerModeSettings
                 )
                     .padding(12)
             case .integrationLogs:
@@ -188,7 +208,12 @@ struct ContentView: View {
                     accessibility: appModel.accessibility
                 )
             case .integrationYAMLTree:
-                WhatsAppWebYAMLTreeTesterScreen()
+                switch appModel.whatsAppIntegrationSettings.mode {
+                case .web:
+                    WhatsAppWebYAMLTreeTesterScreen()
+                case .desktopAX:
+                    WhatsAppNativeYAMLTreeTesterScreen()
+                }
             case .serverLogs:
                 ServerLogsScreen()
             case .lmStudio:

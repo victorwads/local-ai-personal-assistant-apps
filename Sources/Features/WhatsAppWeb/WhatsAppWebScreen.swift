@@ -34,40 +34,42 @@ struct WhatsAppWebScreen: View {
 
                     Spacer()
 
-                    TextField("Capture name", text: $captureNameDraft)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 220)
+                    if appModel.developerModeSettings.isEnabled {
+                        TextField("Capture name", text: $captureNameDraft)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 220)
 
-                    Button {
-                        Task {
-                            await appModel.captureWhatsAppWebSnapshot(for: account)
+                        Button {
+                            Task {
+                                await appModel.captureWhatsAppWebSnapshot(for: account)
+                            }
+                        } label: {
+                            Label("Refresh Snapshot", systemImage: "arrow.clockwise.circle")
                         }
-                    } label: {
-                        Label("Refresh Snapshot", systemImage: "arrow.clockwise.circle")
-                    }
 
-                    Button {
-                        Task {
-                            await appModel.forceUpdateSelectedWhatsAppWebChat(for: account)
+                        Button {
+                            Task {
+                                await appModel.forceUpdateSelectedWhatsAppWebChat(for: account)
+                            }
+                        } label: {
+                            Label("Update This Chat", systemImage: "arrow.triangle.2.circlepath")
                         }
-                    } label: {
-                        Label("Update This Chat", systemImage: "arrow.triangle.2.circlepath")
-                    }
 
-                    Button {
-                        Task {
-                            let trimmedName = captureNameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-                            await appModel.captureAndSaveWhatsAppWebSnapshot(for: account, named: trimmedName.isEmpty ? nil : trimmedName)
-                            captureNameDraft = ""
+                        Button {
+                            Task {
+                                let trimmedName = captureNameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+                                await appModel.captureAndSaveWhatsAppWebSnapshot(for: account, named: trimmedName.isEmpty ? nil : trimmedName)
+                                captureNameDraft = ""
+                            }
+                        } label: {
+                            Label("Save Snapshot", systemImage: "square.and.arrow.down")
                         }
-                    } label: {
-                        Label("Save Snapshot", systemImage: "square.and.arrow.down")
-                    }
 
-                    Button {
-                        appModel.whatsAppWebDebugCaptureService.revealCapturesDirectoryInFinder()
-                    } label: {
-                        Label("Open Captures Folder", systemImage: "folder")
+                        Button {
+                            appModel.whatsAppWebDebugCaptureService.revealCapturesDirectoryInFinder()
+                        } label: {
+                            Label("Open Captures Folder", systemImage: "folder")
+                        }
                     }
                 }
                 .padding(12)
@@ -117,7 +119,7 @@ struct WhatsAppWebScreen: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                if let snapshot = appModel.selectedWhatsAppWebPageSnapshot {
+                if appModel.developerModeSettings.isEnabled, let snapshot = appModel.selectedWhatsAppWebPageSnapshot {
                     Divider()
 
                     VStack(alignment: .leading, spacing: 6) {

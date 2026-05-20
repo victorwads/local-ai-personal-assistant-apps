@@ -55,6 +55,7 @@ final class AppModel: ObservableObject {
     let mcpSendPrefixSettings: MCPSendPrefixSettingsModel
     let whatsAppWebSettings: WhatsAppWebSettingsModel
     let whatsAppIntegrationSettings: WhatsAppIntegrationSettingsModel
+    let developerModeSettings: DeveloperModeSettingsModel
 
     let accessibility = AccessibilityService()
     let accessibilityScheduler = AccessibilityActionScheduler()
@@ -227,6 +228,10 @@ final class AppModel: ObservableObject {
         whatsAppIntegrationSettings = WhatsAppIntegrationSettingsModel(
             loadPersistedValues: shouldLoadPersistedSettings,
             repository: WhatsAppIntegrationSettingsRepository(defaults: profileDefaults)
+        )
+        developerModeSettings = DeveloperModeSettingsModel(
+            loadPersistedValues: shouldLoadPersistedSettings,
+            repository: DeveloperModeSettingsRepository(defaults: profileDefaults)
         )
         whatsAppWebSessionStore.setCustomUserAgent(whatsAppWebSettings.effectiveCustomUserAgent)
         whatsAppWebSessionStore.setInspectable(whatsAppWebSettings.isInspectable)

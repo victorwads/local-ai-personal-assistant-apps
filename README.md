@@ -86,6 +86,10 @@ If the UI says Accessibility is not trusted:
 
 macOS grants permission to the exact app binary, so the identity may matter after rebuilds.
 
+## Developer mode
+
+Developer mode is disabled by default. When off, the UI hides internal debug/logging screens and the WebView snapshot controls. Enable it from `Settings` → `Developer` when you need inspection tooling.
+
 ## Contributing
 
 - Keep changes native and local-first.

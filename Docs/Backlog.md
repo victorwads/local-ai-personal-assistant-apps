@@ -447,3 +447,33 @@ Adicionar uma configuração global nas `Settings` chamada `Modo desenvolvedor`,
 Isso limpa a interface principal para uso normal, reduz ruído visual e separa bem o que é operação do que é manutenção/instrumentação interna.
 
 ---
+
+## 17) i18n no app e idiomas iniciais
+
+Valor: `V4 - Alto`
+Risco de Desenvolvimento: `R3 - Médio`
+Risco da Feature: `R1 - Baixíssimo`
+Score de Execução: `0.62`
+
+**Descrição**  
+Adicionar suporte de internacionalização no app, começando pelos nomes dos menus do macOS e já prevendo um pacote inicial de idiomas para a interface principal. A primeira etapa pode ser tornar os itens como `File`, `Edit`, `View`, `Window`, `Help` e os menus internos do app dependentes de strings traduzíveis, e o primeiro conjunto suportado deve incluir `Portuguese`, `English`, `Spanish`, `Mandarin Chinese`, `Hindi` e `French`.
+
+**Dependências**  
+- `Nenhuma`
+
+**Comportamento desejado**  
+- Centralizar textos de interface em uma camada de tradução.
+- Começar pelos nomes dos menus do app e do macOS.
+- Permitir que a app escolha idioma de forma consistente sem hardcode espalhado.
+- Suportar inicialmente `Portuguese`, `English`, `Spanish`, `Mandarin Chinese`, `Hindi` e `French`.
+- Manter o comportamento atual como padrão enquanto o restante da interface ainda não for traduzido.
+
+**Notas técnicas**  
+- Esse item pode começar com um conjunto pequeno de chaves de tradução para validar a estrutura.
+- A arquitetura precisa facilitar expansão futura para outras telas sem refatoração grande.
+- Vale confirmar se a estratégia vai seguir idioma do sistema, configuração manual ou ambos.
+
+**Por que isso entra no backlog**  
+Isso prepara o app para uma interface mais acessível e organizada, e permite começar pela parte mais visível e estruturante: os menus e o pacote inicial de idiomas.
+
+---

@@ -9,6 +9,7 @@ struct SettingsScreen: View {
     @ObservedObject var mcpSendPrefixSettings: MCPSendPrefixSettingsModel
     @ObservedObject var whatsAppWebSettings: WhatsAppWebSettingsModel
     @ObservedObject var whatsAppIntegrationSettings: WhatsAppIntegrationSettingsModel
+    @ObservedObject var developerModeSettings: DeveloperModeSettingsModel
 
     var body: some View {
         ScrollView {
@@ -78,6 +79,18 @@ struct SettingsScreen: View {
                             .buttonStyle(.plain)
                             .help("Experimental. This can temporarily block mouse and keyboard input during message send (up to 5 seconds).")
                         }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
+                GroupBox("Developer") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Toggle("Developer mode", isOn: $developerModeSettings.isEnabled)
+                            .toggleStyle(.switch)
+
+                        Text("When off (default), hides internal debugging and inspection tools from the sidebar and WebView UI.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
