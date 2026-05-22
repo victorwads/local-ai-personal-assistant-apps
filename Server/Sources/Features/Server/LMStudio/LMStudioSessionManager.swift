@@ -1,3 +1,4 @@
+import AppKit
 import Combine
 import Foundation
 
@@ -16,6 +17,7 @@ final class LMStudioSessionManager: ObservableObject {
     private let apiClient = LMStudioAPIClient()
     private let credentialsRepository = LMStudioCredentialsRepository.shared
     private let defaults = UserDefaults.standard
+    private let preferredModelDisplayName = "Qwen3.6 35B A3B"
     private let selectedModelKeyDefaultsKey = "lmStudio.selectedModelKey.v1"
     private let apiBaseURLDefaultsKey = "lmStudio.apiBaseURL.v1"
     private let autoRunEnabledDefaultsKey = "lmStudio.autoRunEnabled.v1"
@@ -245,7 +247,7 @@ final class LMStudioSessionManager: ObservableObject {
         logHandler = handler
     }
 
-    func refreshModels() async {
+    func refreshModels(logErrors: Bool = true) async {
         guard !isRefreshingModels else { return }
         isRefreshingModels = true
         defer { isRefreshingModels = false }
@@ -256,8 +258,7 @@ final class LMStudioSessionManager: ObservableObject {
                 apiToken: apiToken
             )
             models = fetched
-            // Intentionally do not mutate `selectedModelKey` here.
-            // The UI is responsible for selection; refresh should only mirror the server catalog.
+            selectPreferredModelIfNeeded()
             lastErrorMessage = nil
             let previewKeys = fetched.prefix(5).map(\.key).joined(separator: ", ")
             if previewKeys.isEmpty {
@@ -267,7 +268,9 @@ final class LMStudioSessionManager: ObservableObject {
             }
         } catch {
             lastErrorMessage = error.localizedDescription
-            appendLog("Failed to refresh LM Studio models: \(error.localizedDescription)", level: .error)
+            if logErrors {
+                appendLog("Failed to refresh LM Studio models: \(error.localizedDescription)", level: .error)
+            }
         }
     }
 
@@ -309,6 +312,8 @@ final class LMStudioSessionManager: ObservableObject {
             appendLog(message, level: .error)
             return
         }
+
+        guard await ensureLMStudioReadyForStart() else { return }
 
         let trimmedModelKey = selectedModelKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedModelKey.isEmpty else {
@@ -396,7 +401,6 @@ final class LMStudioSessionManager: ObservableObject {
         lastErrorMessage = nil
         activityPhase = .idle
 
-        let mcpServerLabel = Self.mcpServerLabel(for: mcpServerURL)
         let correction = Self.plainTextCorrectionPrompt(lastPlainText: lastPlainText, attempt: plainTextRepairAttempts)
 
         timeline.append(
@@ -595,6 +599,78 @@ final class LMStudioSessionManager: ObservableObject {
         guard autoRunEnabled else { return }
         guard !isSessionActive else { return }
         await startFreshSession(mcpServerURL: mcpServerURL)
+    }
+
+    func openLMStudioApp(activate: Bool = false) {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+        process.arguments = activate ? ["-a", "LM Studio"] : ["-g", "-a", "LM Studio"]
+
+        do {
+            try process.run()
+            appendLog("Requested LM Studio app launch.")
+        } catch {
+            appendLog("Failed to open LM Studio: \(error.localizedDescription)", level: .error)
+        }
+    }
+
+    private func ensureLMStudioReadyForStart() async -> Bool {
+        ensureLMStudioAppIsRunning()
+
+        if selectedModelKey.isEmpty || selectedModel == nil {
+            await refreshModels(logErrors: false)
+        }
+
+        if selectedModelKey.isEmpty || selectedModel == nil {
+            openLMStudioApp()
+
+            for attempt in 1...20 {
+                guard !Task.isCancelled else { return false }
+                try? await Task.sleep(for: .seconds(1))
+                await refreshModels(logErrors: false)
+
+                if selectedModelKey.isEmpty || selectedModel == nil {
+                    continue
+                }
+
+                appendLog("LM Studio is ready after \(attempt) attempt(s).")
+                return true
+            }
+
+            let message = "LM Studio is not ready yet. Open LM Studio and make sure a model is available."
+            lastErrorMessage = message
+            appendLog(message, level: .error)
+            sessionState = .failed(message: message)
+            return false
+        }
+
+        return true
+    }
+
+    private func ensureLMStudioAppIsRunning() {
+        if NSWorkspace.shared.runningApplications.contains(where: { $0.localizedName == "LM Studio" }) {
+            return
+        }
+
+        appendLog("LM Studio is not running yet. Opening it in the background.")
+        openLMStudioApp(activate: false)
+    }
+
+    private func selectPreferredModelIfNeeded() {
+        guard selectedModelKey.isEmpty || selectedModel == nil else { return }
+
+        if let preferredModel = models.first(where: { $0.displayName == preferredModelDisplayName }) {
+            selectedModelKey = preferredModel.key
+            return
+        }
+
+        if let firstModel = models.first {
+            selectedModelKey = firstModel.key
+            appendLog(
+                "Preferred LM Studio model not found. Selected \(firstModel.displayName) instead.",
+                level: .warning
+            )
+        }
     }
 
     private static func mcpServerLabel(for url: URL) -> String {
