@@ -4,15 +4,15 @@ import Foundation
 final class ChatListSignaturesRepository {
     static let shared = ChatListSignaturesRepository()
 
-    private let defaults: UserDefaults
+    private let settingsService: FirestoreSettingsService
     private let storageKey = "chatListSignatures.v1"
 
-    init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
+    init(settingsService: FirestoreSettingsService = FirestoreSettingsService(profileID: AppProfile.default.id)) {
+        self.settingsService = settingsService
     }
 
     func load() throws -> PersistedChatListSignatures? {
-        guard let data = defaults.data(forKey: storageKey) else {
+        guard let data = settingsService.data(forKey: storageKey) else {
             return nil
         }
         return try JSONDecoder().decode(PersistedChatListSignatures.self, from: data)
@@ -20,6 +20,8 @@ final class ChatListSignaturesRepository {
 
     func save(_ payload: PersistedChatListSignatures) throws {
         let data = try JSONEncoder().encode(payload)
-        defaults.set(data, forKey: storageKey)
+        Task { @MainActor in
+            await settingsService.set(data, forKey: storageKey)
+        }
     }
 }

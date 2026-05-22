@@ -3,7 +3,8 @@ import WebKit
 
 extension AppModel {
     func loadWhatsAppWebAccounts() async {
-        let accounts = await whatsAppWebAccountsRepository.list()
+        let profiles = await AppProfilesRepository.shared.loadOrCreateDefaultProfiles()
+        let accounts = await whatsAppWebAccountsRepository.loadOrCreateAccounts(for: profiles)
         if let primaryWhatsAppWebAccountId,
            let match = accounts.first(where: { $0.id == primaryWhatsAppWebAccountId }) {
             whatsAppWebAccounts = [match]
@@ -22,8 +23,11 @@ extension AppModel {
     }
 
     func addWhatsAppWebAccount(named name: String) async {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else { return }
+
         do {
-            let account = try await whatsAppWebAccountsRepository.create(name: name)
+            let account = try await whatsAppWebAccountsRepository.create(name: trimmedName, profileID: UUID().uuidString)
             whatsAppWebAccounts.append(account)
             whatsAppWebAccounts.sort { lhs, rhs in
                 if lhs.createdAt != rhs.createdAt {
@@ -98,6 +102,10 @@ extension AppModel {
         }
 
         return whatsAppWebPageSnapshotsByAccountId[selectedWhatsAppWebAccountId]
+    }
+
+    var activeWhatsAppWebAccounts: [WhatsAppWebAccount] {
+        whatsAppWebAccounts.filter { !detachedWhatsAppWebAccountIds.contains($0.id) }
     }
 
     func isWhatsAppWebDetached(_ accountId: UUID) -> Bool {

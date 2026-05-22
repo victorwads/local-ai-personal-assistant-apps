@@ -20,11 +20,11 @@ final class HandsFreeClientVoiceSettingsModel: ObservableObject {
         debounceSeconds = Self.defaultDebounceSeconds
 
         guard loadPersistedValues else { return }
-        loadStoredSettings()
+        reloadStoredSettings()
         bindPersistence()
     }
 
-    private func loadStoredSettings() {
+    func reloadStoredSettings() {
         isEnabled = repository.load(defaultValue: true)
         debounceSeconds = repository.loadDebounceSeconds(defaultValue: Self.defaultDebounceSeconds)
     }

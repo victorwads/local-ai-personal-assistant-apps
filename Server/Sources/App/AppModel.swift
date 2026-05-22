@@ -15,7 +15,7 @@ final class AppModel: ObservableObject {
     let profile: AppProfile
     let profileIndex: Int
     let startupMode: StartupMode
-    private let profileDefaults: UserDefaults
+    private let settingsService: FirestoreSettingsService
     let primaryWhatsAppWebAccountId: UUID?
 
     @Published var logs: [LogEntry] = []
@@ -156,6 +156,7 @@ final class AppModel: ObservableObject {
     var listSignaturesById: [String: String] = [:]
     var cancellables: Set<AnyCancellable> = []
     var liveStatusTask: Task<Void, Never>?
+    var didBindConversationAccessPersistence = false
     let serverCallsRepository: ServerCallsRepository
     let nicknamesRepository: NicknamesRepository
     let memoriesRepository: MemoriesRepository
@@ -182,23 +183,22 @@ final class AppModel: ObservableObject {
         self.profileIndex = profileIndex
         self.startupMode = startupMode
         self.primaryWhatsAppWebAccountId = primaryWhatsAppWebAccountId
-        let resolvedProfileDefaults = ProfileDefaults.defaults(for: profile)
-        profileDefaults = resolvedProfileDefaults
+        settingsService = FirestoreSettingsService(profileID: profile.id)
 
-        memoryStore = WhatsAppMemoryStore(sendPrefixRepository: MCPSendPrefixRepository(defaults: profileDefaults))
-        clientPromptWaitRepository = ClientPromptWaitRepository(defaults: profileDefaults)
+        memoryStore = WhatsAppMemoryStore(sendPrefixRepository: MCPSendPrefixRepository(settingsService: settingsService))
+        clientPromptWaitRepository = ClientPromptWaitRepository(profileID: profile.id)
 
         serverCallsRepository = ServerCallsRepository(profileDirectoryName: profile.isDefault ? "profile-1" : profile.id)
-        nicknamesRepository = NicknamesRepository(defaults: profileDefaults)
-        memoriesRepository = MemoriesRepository(defaults: profileDefaults)
-        subjectsRepository = SubjectsRepository(defaults: profileDefaults)
-        // WhatsApp Web accounts define the "profiles" (windows). Keep accounts global so Settings can manage them.
-        whatsAppWebAccountsRepository = WhatsAppWebAccountsRepository(defaults: .standard)
-        clientVoiceEventsRepository = ClientVoiceEventsRepository(defaults: profileDefaults)
-        chatHistoryRepository = ChatHistoryRepository(defaults: profileDefaults)
-        chatListSignaturesRepository = ChatListSignaturesRepository(defaults: profileDefaults)
-        conversationAccessRepository = ConversationAccessRepository(defaults: profileDefaults)
-        whatsAppPollingStateRepository = WhatsAppPollingStateRepository(defaults: profileDefaults)
+        nicknamesRepository = NicknamesRepository(profileID: profile.id)
+        memoriesRepository = MemoriesRepository(profileID: profile.id)
+        subjectsRepository = SubjectsRepository(profileID: profile.id)
+        // WhatsApp Web accounts are stored per profile doc so each window stays attached to its profile.
+        whatsAppWebAccountsRepository = WhatsAppWebAccountsRepository()
+        clientVoiceEventsRepository = ClientVoiceEventsRepository(profileID: profile.id)
+        chatHistoryRepository = ChatHistoryRepository(profileID: profile.id)
+        chatListSignaturesRepository = ChatListSignaturesRepository(settingsService: settingsService)
+        conversationAccessRepository = ConversationAccessRepository(settingsService: settingsService)
+        whatsAppPollingStateRepository = WhatsAppPollingStateRepository(settingsService: settingsService)
 
         let keychainService = "dev.wads.AssistantMCPServer" + (profile.isDefault ? "" : ".\(profile.id)")
         sensitiveDataRepository = SensitiveDataRepository(
@@ -208,32 +208,32 @@ final class AppModel: ObservableObject {
         let shouldLoadPersistedSettings = startupMode == .live
         voiceSettings = VoiceSettingsModel(
             loadPersistedValues: shouldLoadPersistedSettings,
-            voiceSettingsRepository: VoiceSettingsRepository(defaults: profileDefaults),
-            experimentalSpeakSettingsRepository: ExperimentalSpeakSettingsRepository(defaults: profileDefaults)
+            voiceSettingsRepository: VoiceSettingsRepository(settingsService: settingsService),
+            experimentalSpeakSettingsRepository: ExperimentalSpeakSettingsRepository(settingsService: settingsService)
         )
         handsFreeClientVoiceSettings = HandsFreeClientVoiceSettingsModel(
             loadPersistedValues: shouldLoadPersistedSettings,
-            repository: HandsFreeClientVoiceSettingsRepository(defaults: profileDefaults)
+            repository: HandsFreeClientVoiceSettingsRepository(settingsService: settingsService)
         )
         inputLockSettings = InputLockSettingsModel(
             loadPersistedValues: shouldLoadPersistedSettings,
-            repository: InputLockSettingsRepository(defaults: profileDefaults)
+            repository: InputLockSettingsRepository(settingsService: settingsService)
         )
         mcpSendPrefixSettings = MCPSendPrefixSettingsModel(
             loadPersistedValues: shouldLoadPersistedSettings,
-            repository: MCPSendPrefixRepository(defaults: profileDefaults)
+            repository: MCPSendPrefixRepository(settingsService: settingsService)
         )
         whatsAppWebSettings = WhatsAppWebSettingsModel(
             loadPersistedValues: shouldLoadPersistedSettings,
-            repository: WhatsAppWebSettingsRepository(defaults: profileDefaults)
+            repository: WhatsAppWebSettingsRepository(settingsService: settingsService)
         )
         whatsAppIntegrationSettings = WhatsAppIntegrationSettingsModel(
             loadPersistedValues: shouldLoadPersistedSettings,
-            repository: WhatsAppIntegrationSettingsRepository(defaults: profileDefaults)
+            repository: WhatsAppIntegrationSettingsRepository(settingsService: settingsService)
         )
         developerModeSettings = DeveloperModeSettingsModel(
             loadPersistedValues: shouldLoadPersistedSettings,
-            repository: DeveloperModeSettingsRepository(defaults: profileDefaults)
+            repository: DeveloperModeSettingsRepository(settingsService: settingsService)
         )
         whatsAppWebSessionStore.setCustomUserAgent(whatsAppWebSettings.effectiveCustomUserAgent)
         whatsAppWebSessionStore.setInspectable(whatsAppWebSettings.isInspectable)
@@ -262,6 +262,24 @@ final class AppModel: ObservableObject {
             refreshMicrophoneAuthorization()
             refreshSpeechRecognitionAuthorization()
             bindFeatureSettings()
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                await self.settingsService.startListening()
+                self.voiceSettings.reloadStoredSettings()
+                self.handsFreeClientVoiceSettings.reloadStoredSettings()
+                self.inputLockSettings.reloadStoredValue()
+                self.mcpSendPrefixSettings.reloadStoredValue()
+                self.whatsAppWebSettings.reloadStoredValues()
+                self.whatsAppIntegrationSettings.reloadStoredValue()
+                self.developerModeSettings.reloadStoredValue()
+                self.loadConversationAccessSettings()
+                self.loadChatListSignatures()
+                await self.nicknamesRepository.startListening()
+                await self.memoriesRepository.startListening()
+                await self.subjectsRepository.startListening()
+                await self.clientVoiceEventsRepository.startListening()
+                await self.clientPromptWaitRepository.startListening()
+            }
             Task { [weak self] in
                 await self?.markStaleClientVoiceAsLost()
                 await self?.refreshPendingClientAskCount()
@@ -277,8 +295,8 @@ final class AppModel: ObservableObject {
             }
             refreshStatus()
             startLiveStatusMonitoring()
-            let shouldStartPolling = whatsAppPollingStateRepository.loadPollingEnabled(defaultValue: true)
             Task {
+                let shouldStartPolling = whatsAppPollingStateRepository.loadPollingEnabled(defaultValue: true)
                 await startMCPServer()
                 if shouldStartPolling {
                     startPolling()

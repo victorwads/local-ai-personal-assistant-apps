@@ -89,11 +89,6 @@ struct ProfilesHomeScreen: View {
             .frame(maxWidth: 980, alignment: .topLeading)
         }
         .navigationTitle("Assistant MCP")
-        .background(
-            WindowAccessor { window in
-                profileWindowManager.registerHomeWindow(window)
-            }
-        )
         .task {
             guard !didBootstrap else { return }
             didBootstrap = true

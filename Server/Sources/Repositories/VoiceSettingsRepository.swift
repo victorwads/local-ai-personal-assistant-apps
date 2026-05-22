@@ -5,35 +5,32 @@ import Foundation
 final class VoiceSettingsRepository {
     static let shared = VoiceSettingsRepository()
 
-    private let defaults: UserDefaults
+    private let settingsService: FirestoreSettingsService
 
     private let speechVoiceIdentifierDefaultsKey = "speechVoiceIdentifier"
     private let speechLanguageDefaultsKey = "speechLanguage"
     private let speechRateDefaultsKey = "speechRate"
     private let recognitionLocaleIdentifierDefaultsKey = "recognitionLocaleIdentifier"
 
-    init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
+    init(settingsService: FirestoreSettingsService = FirestoreSettingsService(profileID: AppProfile.default.id)) {
+        self.settingsService = settingsService
     }
 
     func load() -> (voiceIdentifier: String?, language: String, rate: Float, recognitionLocale: String) {
-        let voiceIdentifier = defaults.string(forKey: speechVoiceIdentifierDefaultsKey)
-        let language = defaults.string(forKey: speechLanguageDefaultsKey) ?? "pt-BR"
-        let recognitionLocale = defaults.string(forKey: recognitionLocaleIdentifierDefaultsKey) ?? "pt-BR"
-        let rate: Float = {
-            if let number = defaults.object(forKey: speechRateDefaultsKey) as? NSNumber {
-                return number.floatValue
-            }
-            return AVSpeechUtteranceDefaultSpeechRate
-        }()
+        let voiceIdentifier = settingsService.string(forKey: speechVoiceIdentifierDefaultsKey)
+        let language = settingsService.string(forKey: speechLanguageDefaultsKey) ?? "pt-BR"
+        let recognitionLocale = settingsService.string(forKey: recognitionLocaleIdentifierDefaultsKey) ?? "pt-BR"
+        let rate = Float(settingsService.double(forKey: speechRateDefaultsKey, default: Double(AVSpeechUtteranceDefaultSpeechRate)))
 
         return (voiceIdentifier: voiceIdentifier, language: language, rate: rate, recognitionLocale: recognitionLocale)
     }
 
     func save(voiceIdentifier: String?, language: String, rate: Float, recognitionLocale: String) {
-        defaults.set(voiceIdentifier, forKey: speechVoiceIdentifierDefaultsKey)
-        defaults.set(language, forKey: speechLanguageDefaultsKey)
-        defaults.set(NSNumber(value: rate), forKey: speechRateDefaultsKey)
-        defaults.set(recognitionLocale, forKey: recognitionLocaleIdentifierDefaultsKey)
+        Task { @MainActor in
+            await settingsService.set(voiceIdentifier, forKey: speechVoiceIdentifierDefaultsKey)
+            await settingsService.set(language, forKey: speechLanguageDefaultsKey)
+            await settingsService.set(Double(rate), forKey: speechRateDefaultsKey)
+            await settingsService.set(recognitionLocale, forKey: recognitionLocaleIdentifierDefaultsKey)
+        }
     }
 }

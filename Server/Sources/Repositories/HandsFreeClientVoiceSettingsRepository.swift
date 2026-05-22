@@ -5,35 +5,33 @@ final class HandsFreeClientVoiceSettingsRepository {
     static let shared = HandsFreeClientVoiceSettingsRepository()
     static let defaultDebounceSeconds = 2.5
 
-    private let defaults: UserDefaults
+    private let settingsService: FirestoreSettingsService
     private let enabledStorageKey = "handsFreeClientVoiceEnabled"
     private let debounceSecondsStorageKey = "handsFreeClientVoiceDebounceSeconds"
 
-    init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
+    init(settingsService: FirestoreSettingsService = FirestoreSettingsService(profileID: AppProfile.default.id)) {
+        self.settingsService = settingsService
     }
 
     func load(defaultValue: Bool = true) -> Bool {
-        if defaults.object(forKey: enabledStorageKey) == nil {
-            return defaultValue
-        }
-        return defaults.bool(forKey: enabledStorageKey)
+        settingsService.value(forKey: enabledStorageKey) as? Bool ?? defaultValue
     }
 
     func save(_ enabled: Bool) {
-        defaults.set(enabled, forKey: enabledStorageKey)
+        Task { @MainActor in
+            await settingsService.set(enabled, forKey: enabledStorageKey)
+        }
     }
 
     func loadDebounceSeconds(defaultValue: Double = 2.5) -> Double {
-        guard let number = defaults.object(forKey: debounceSecondsStorageKey) as? NSNumber else {
-            return defaultValue
-        }
-
-        return Self.clampDebounceSeconds(number.doubleValue)
+        Self.clampDebounceSeconds(settingsService.double(forKey: debounceSecondsStorageKey, default: defaultValue))
     }
 
     func save(debounceSeconds: Double) {
-        defaults.set(NSNumber(value: Self.clampDebounceSeconds(debounceSeconds)), forKey: debounceSecondsStorageKey)
+        let clamped = Self.clampDebounceSeconds(debounceSeconds)
+        Task { @MainActor in
+            await settingsService.set(clamped, forKey: debounceSecondsStorageKey)
+        }
     }
 
     private static func clampDebounceSeconds(_ value: Double) -> Double {

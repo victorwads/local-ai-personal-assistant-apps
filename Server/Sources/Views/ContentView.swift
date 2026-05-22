@@ -95,7 +95,7 @@ struct ContentView: View {
                     sidebarItem(.whatsAppChats)
 
                     if appModel.whatsAppIntegrationSettings.mode == .web {
-                        ForEach(appModel.whatsAppWebAccounts.filter { !appModel.isWhatsAppWebDetached($0.id) }) { account in
+                        ForEach(appModel.activeWhatsAppWebAccounts) { account in
                             sidebarItem(.whatsAppWebAccount(account.id))
                         }
                     } else {

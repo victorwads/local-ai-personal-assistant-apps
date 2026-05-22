@@ -27,7 +27,7 @@ final class WhatsAppWebSettingsModel: ObservableObject {
         pageZoom = Self.defaultPageZoom
 
         guard loadPersistedValues else { return }
-        loadStoredValue()
+        reloadStoredValues()
         bindPersistence()
     }
 
@@ -43,7 +43,7 @@ final class WhatsAppWebSettingsModel: ObservableObject {
         pageZoom = Self.defaultPageZoom
     }
 
-    private func loadStoredValue() {
+    func reloadStoredValues() {
         customUserAgent = repository.loadCustomUserAgent(defaultValue: Self.defaultCustomUserAgent)
         isInspectable = repository.loadInspectable(defaultValue: Self.defaultInspectable)
         messageSettleDelayMilliseconds = repository.loadMessageSettleDelay(defaultValue: Self.defaultMessageSettleDelayMilliseconds)

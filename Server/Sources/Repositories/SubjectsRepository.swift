@@ -1,4 +1,6 @@
 import Foundation
+import FirebaseFirestore
+import os
 
 enum SubjectsRepositoryError: LocalizedError {
     case missingParameter(String)
@@ -15,18 +17,50 @@ enum SubjectsRepositoryError: LocalizedError {
 }
 
 actor SubjectsRepository {
-    static let shared = SubjectsRepository()
+    private let profileID: String
+    private var entries: [SubjectEntry] = []
+    private var listenerRegistration: ListenerRegistrationWrapper?
+    private let logger = Logger(subsystem: "dev.wads.AssistantMCPServer", category: "SubjectsRepository")
 
-    private let defaults: UserDefaults
-    private let storageKey = "subjects.v2"
+    init(profileID: String) {
+        self.profileID = profileID
+    }
 
-    init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
+    func startListening() {
+        let firestore = Firestore.firestore()
+        let path = FirestoreCollections.Issues(profileID)
+        
+        let registration = firestore.collection(path).addSnapshotListener { [weak self] snapshot, error in
+            guard let self = self else { return }
+            guard let snapshot = snapshot else {
+                if let error = error {
+                    self.logger.error("Error listening to issues: \(error.localizedDescription)")
+                }
+                return
+            }
+            
+            var newEntries: [SubjectEntry] = []
+            for document in snapshot.documents {
+                if let entry = SubjectEntry.fromFirestoreData(document.data()) {
+                    newEntries.append(entry)
+                }
+            }
+            
+            Task {
+                await self.updateEntries(newEntries)
+            }
+        }
+        
+        self.listenerRegistration = ListenerRegistrationWrapper(registration)
+    }
+
+    private func updateEntries(_ newEntries: [SubjectEntry]) {
+        self.entries = newEntries
+        NotificationCenter.default.post(name: .subjectsRepositoryDidChange, object: nil)
     }
 
     func listAll() -> [SubjectEntry] {
-        loadAll()
-            .sorted { $0.updatedAt > $1.updatedAt }
+        entries.sorted { $0.updatedAt > $1.updatedAt }
     }
 
     func listActive() -> [SubjectEntry] {
@@ -37,7 +71,7 @@ actor SubjectsRepository {
         guard let id else {
             throw SubjectsRepositoryError.missingParameter("id")
         }
-        guard let found = loadAll().first(where: { $0.id == id }) else {
+        guard let found = entries.first(where: { $0.id == id }) else {
             throw SubjectsRepositoryError.invalidParameter("Subject not found")
         }
         return found
@@ -55,7 +89,7 @@ actor SubjectsRepository {
         whatsappChatId: String?,
         gmailThreadId: String?,
         calendarEventId: String?
-    ) throws -> SubjectEntry {
+    ) async throws -> SubjectEntry {
         let trimmedTitle = (title ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmedTitle.isEmpty {
             throw SubjectsRepositoryError.missingParameter("title")
@@ -76,7 +110,6 @@ actor SubjectsRepository {
             throw SubjectsRepositoryError.missingParameter("stopCondition")
         }
 
-        var all = loadAll()
         let now = Date()
         let entry = SubjectEntry(
             id: UUID(),
@@ -97,8 +130,8 @@ actor SubjectsRepository {
             createdAt: now,
             updatedAt: now
         )
-        all.append(entry)
-        persistAll(all)
+        
+        try await persistEntry(entry)
         return entry
     }
 
@@ -116,17 +149,15 @@ actor SubjectsRepository {
         whatsappAfterMessageId: String?,
         gmailThreadId: String?,
         calendarEventId: String?
-    ) throws -> SubjectEntry {
+    ) async throws -> SubjectEntry {
         guard let id else {
             throw SubjectsRepositoryError.missingParameter("id")
         }
 
-        var all = loadAll()
-        guard let index = all.firstIndex(where: { $0.id == id }) else {
+        guard var subject = entries.first(where: { $0.id == id }) else {
             throw SubjectsRepositoryError.invalidParameter("Subject not found")
         }
 
-        var subject = all[index]
         if let title {
             let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
             if !trimmedTitle.isEmpty {
@@ -179,28 +210,27 @@ actor SubjectsRepository {
         }
 
         subject.updatedAt = Date()
-        all[index] = subject
-        persistAll(all)
+        try await persistEntry(subject)
         return subject
     }
 
-    func resolve(id: UUID?, reason: String?) throws -> SubjectEntry {
-        try close(
+    func resolve(id: UUID?, reason: String?) async throws -> SubjectEntry {
+        try await close(
             id: id,
             status: .resolved,
             reason: reason
         )
     }
 
-    func cancel(id: UUID?, reason: String?) throws -> SubjectEntry {
-        try close(
+    func cancel(id: UUID?, reason: String?) async throws -> SubjectEntry {
+        try await close(
             id: id,
             status: .canceled,
             reason: reason
         )
     }
 
-    private func close(id: UUID?, status: SubjectStatus, reason: String?) throws -> SubjectEntry {
+    private func close(id: UUID?, status: SubjectStatus, reason: String?) async throws -> SubjectEntry {
         guard let id else {
             throw SubjectsRepositoryError.missingParameter("id")
         }
@@ -210,15 +240,12 @@ actor SubjectsRepository {
             throw SubjectsRepositoryError.missingParameter("reason")
         }
 
-        var all = loadAll()
-        guard let index = all.firstIndex(where: { $0.id == id }) else {
+        guard var subject = entries.first(where: { $0.id == id }) else {
             throw SubjectsRepositoryError.invalidParameter("Subject not found")
         }
 
-        var subject = all[index]
         try applyTerminalStatus(&subject, status: status, reason: trimmedReason)
-        all[index] = subject
-        persistAll(all)
+        try await persistEntry(subject)
         return subject
     }
 
@@ -275,93 +302,9 @@ actor SubjectsRepository {
         return trimmed
     }
 
-    private func loadAll() -> [SubjectEntry] {
-        if let data = defaults.data(forKey: storageKey),
-           let entries = try? JSONDecoder().decode([SubjectEntry].self, from: data) {
-            return entries.map { migrate($0) }
-        }
-
-        if let migrated = loadAllFromV1Fallback() {
-            // Persist as v2 so we only migrate once.
-            persistAll(migrated)
-            return migrated
-        }
-
-        return []
-    }
-
-    private struct SubjectEntryV1: Codable {
-        let id: UUID
-        var title: String
-        var summary: String
-        var details: String?
-        var status: SubjectStatus
-        var priority: Int
-        var participants: [String]
-        var nextSteps: [String]
-        var eventLog: [EventEntry]
-
-        var whatsappChatId: String?
-        var whatsappAfterMessageId: String?
-        var gmailThreadId: String?
-        var calendarEventId: String?
-
-        let createdAt: Date
-        var updatedAt: Date
-    }
-
-    private func loadAllFromV1Fallback() -> [SubjectEntry]? {
-        let v1Key = "subjects.v1"
-        guard let data = defaults.data(forKey: v1Key) else { return nil }
-        guard let entries = try? JSONDecoder().decode([SubjectEntryV1].self, from: data) else { return nil }
-
-        let migrated: [SubjectEntry] = entries.map { old in
-            SubjectEntry(
-                id: old.id,
-                title: old.title,
-                summary: old.summary,
-                initialRequest: old.summary,
-                stopCondition: "",
-                details: old.details,
-                status: old.status,
-                priority: old.priority,
-                participants: old.participants,
-                nextSteps: old.nextSteps,
-                eventLog: old.eventLog,
-                whatsappChatId: old.whatsappChatId,
-                whatsappAfterMessageId: old.whatsappAfterMessageId,
-                gmailThreadId: old.gmailThreadId,
-                calendarEventId: old.calendarEventId,
-                createdAt: old.createdAt,
-                updatedAt: old.updatedAt
-            )
-        }
-
-        return migrated.map { migrate($0) }
-    }
-
-    private func migrate(_ entry: SubjectEntry) -> SubjectEntry {
-        var mutable = entry
-        if mutable.summary.isEmpty {
-            mutable.summary = "(Resumo não disponível - sujeito antigo)"
-        }
-        if mutable.initialRequest.isEmpty {
-            mutable.initialRequest = "(Solicitacao inicial nao disponivel - sujeito antigo)"
-        }
-        if mutable.stopCondition.isEmpty {
-            mutable.stopCondition = "(Condição de parada não disponível - sujeito antigo)"
-        }
-        if mutable.eventLog.isEmpty {
-            mutable.eventLog = []
-        }
-        return mutable
-    }
-
-    private func persistAll(_ subjects: [SubjectEntry]) {
-        guard let data = try? JSONEncoder().encode(subjects) else {
-            return
-        }
-        defaults.set(data, forKey: storageKey)
-        NotificationCenter.default.post(name: .subjectsRepositoryDidChange, object: nil)
+    private func persistEntry(_ entry: SubjectEntry) async throws {
+        let firestore = Firestore.firestore()
+        let path = FirestoreCollections.Issues(profileID) + "/\(entry.id.uuidString)"
+        try await firestore.document(path).setData(entry.toFirestoreData(), merge: true)
     }
 }

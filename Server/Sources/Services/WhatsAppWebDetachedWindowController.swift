@@ -45,11 +45,14 @@ final class WhatsAppWebDetachedWindowController: NSWindowController, NSWindowDel
         window.makeKeyAndOrderFront(nil)
     }
 
-    func windowWillClose(_ notification: Notification) {
-        guard notification.object as? NSWindow === window else {
-            return
+    nonisolated func windowWillClose(_ notification: Notification) {
+        Task { @MainActor [weak self] in
+            self?.handleWindowWillClose()
         }
+    }
 
+    @MainActor
+    private func handleWindowWillClose() {
         appModel?.handleDetachedWhatsAppWebWindowClosed(accountId: accountId)
     }
 }

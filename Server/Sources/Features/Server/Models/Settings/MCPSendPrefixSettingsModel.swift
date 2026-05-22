@@ -18,7 +18,7 @@ final class MCPSendPrefixSettingsModel: ObservableObject {
         sendMessageSignature = ""
 
         guard loadPersistedValues else { return }
-        loadStoredValue()
+        reloadStoredValue()
         bindPersistence()
     }
 
@@ -49,7 +49,7 @@ final class MCPSendPrefixSettingsModel: ObservableObject {
         return messages
     }
 
-    private func loadStoredValue() {
+    func reloadStoredValue() {
         let stored = repository.load()
         sendMessagePrefix = stored.assistantName
         sendMessageSignature = stored.signature

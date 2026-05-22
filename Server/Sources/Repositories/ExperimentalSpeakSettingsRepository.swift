@@ -4,21 +4,20 @@ import Foundation
 final class ExperimentalSpeakSettingsRepository {
     static let shared = ExperimentalSpeakSettingsRepository()
 
-    private let defaults: UserDefaults
+    private let settingsService: FirestoreSettingsService
     private let storageKey = "experimentalSpeakApiEnabled"
 
-    init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
+    init(settingsService: FirestoreSettingsService = FirestoreSettingsService(profileID: AppProfile.default.id)) {
+        self.settingsService = settingsService
     }
 
     func load(defaultValue: Bool = true) -> Bool {
-        guard let number = defaults.object(forKey: storageKey) as? NSNumber else {
-            return defaultValue
-        }
-        return number.boolValue
+        settingsService.value(forKey: storageKey) as? Bool ?? defaultValue
     }
 
     func save(_ enabled: Bool) {
-        defaults.set(enabled, forKey: storageKey)
+        Task { @MainActor in
+            await settingsService.set(enabled, forKey: storageKey)
+        }
     }
 }

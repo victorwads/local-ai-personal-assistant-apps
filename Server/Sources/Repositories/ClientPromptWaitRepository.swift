@@ -1,23 +1,73 @@
 import Foundation
+import FirebaseFirestore
+import os
 
 actor ClientPromptWaitRepository {
     static let shared = ClientPromptWaitRepository()
 
-    private struct PromptEntry: Codable, Equatable {
+    // MARK: - Types
+
+    private struct PromptEntry {
         let id: UUID
         let createdAt: Date
         let text: String
+
+        func toFirestoreData() -> [String: Any] {
+            [
+                "id": id.uuidString,
+                "createdAt": Timestamp(date: createdAt),
+                "text": text
+            ]
+        }
+
+        static func fromFirestoreData(_ data: [String: Any]) -> PromptEntry? {
+            guard let idStr = data["id"] as? String,
+                  let id = UUID(uuidString: idStr),
+                  let text = data["text"] as? String else { return nil }
+            let createdAt = (data["createdAt"] as? Timestamp)?.dateValue() ?? Date()
+            return PromptEntry(id: id, createdAt: createdAt, text: text)
+        }
     }
 
+    // MARK: - State
+
+    private let profileID: String
     private var activeWaitIDs: Set<UUID> = []
+    private var queuedEntries: [PromptEntry] = []
+    private var listenerRegistration: ListenerRegistrationWrapper?
+    private let logger = Logger(subsystem: "dev.wads.AssistantMCPServer", category: "ClientPromptWaitRepository")
 
-    private let defaults: UserDefaults
-    private let queueStorageKey = "clientPromptQueue.v1"
-    private let draftStorageKey = "clientPromptDraft.v1"
-
-    init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
+    init(profileID: String = "00000000-0000-0000-0000-000000000001") {
+        self.profileID = profileID
     }
+
+    // MARK: - Real-time listener
+
+    func startListening() {
+        guard listenerRegistration == nil else { return }
+        let firestore = Firestore.firestore()
+        let path = FirestoreCollections.PromptQueue(profileID)
+
+        let registration = firestore.collection(path)
+            .order(by: "createdAt", descending: false)
+            .addSnapshotListener { [weak self] snapshot, error in
+                guard let self else { return }
+                guard let snapshot else {
+                    if let error { self.logger.error("PromptQueue listener error: \(error.localizedDescription)") }
+                    return
+                }
+                let updated = snapshot.documents.compactMap { PromptEntry.fromFirestoreData($0.data()) }
+                Task { await self.updateQueue(updated) }
+            }
+        listenerRegistration = ListenerRegistrationWrapper(registration)
+    }
+
+    private func updateQueue(_ entries: [PromptEntry]) {
+        queuedEntries = entries
+        NotificationCenter.default.post(name: .clientPromptWaitRepositoryDidChange, object: nil)
+    }
+
+    // MARK: - Wait tracking (in-memory only — ephemeral)
 
     func beginWait() -> UUID {
         let id = UUID()
@@ -30,72 +80,96 @@ actor ClientPromptWaitRepository {
     }
 
     func pendingWaitCount() -> Int {
-        // Keep the badge visible if we have a queued prompt even when no wait is active.
-        let queued = queuedPromptCount()
-        return max(activeWaitIDs.count, queued > 0 ? 1 : 0)
+        max(activeWaitIDs.count, queuedEntries.isEmpty ? 0 : 1)
     }
+
+    // MARK: - Prompt Queue
 
     func submitPrompt(_ text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            return
-        }
-
-        enqueuePrompt(trimmed)
+        guard !trimmed.isEmpty else { return }
+        let entry = PromptEntry(id: UUID(), createdAt: Date(), text: trimmed)
+        Task { await self.enqueue(entry) }
         clearDraft()
     }
 
     func consumePrompt() -> String? {
-        dequeuePrompt()
+        guard let first = queuedEntries.first else { return nil }
+        Task { await self.dequeue(id: first.id) }
+        return first.text
+    }
+
+    func queuedPromptCount() -> Int {
+        queuedEntries.count
     }
 
     // MARK: - Draft (hands-free prompt window)
 
     func setDraft(_ text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            // Don't clear draft on empty partials; caller can explicitly clear.
-            return
-        }
-        defaults.set(trimmed, forKey: draftStorageKey)
+        guard !trimmed.isEmpty else { return }
+        Task { await self.writeDraft(trimmed) }
     }
 
     func getDraft() -> String? {
-        let value = (defaults.string(forKey: draftStorageKey) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        return value.isEmpty ? nil : value
+        // Draft is read from the listener's initial snapshot; here we read from cache synchronously
+        // via the listener-populated state. For immediate UI needs, returns nil if not yet loaded.
+        // Callers that need the persisted draft should call getDraftAsync().
+        nil
+    }
+
+    func getDraftAsync() async -> String? {
+        let firestore = Firestore.firestore()
+        let path = FirestoreCollections.PromptStateDocument(profileID)
+        guard let snapshot = try? await firestore.document(path).getDocument(source: .cache),
+              let value = snapshot.data()?["draft"] as? String,
+              !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        return value.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     func clearDraft() {
-        defaults.removeObject(forKey: draftStorageKey)
+        Task { await self.writeDraft(nil) }
     }
 
-    // MARK: - Queue (durable client prompts)
+    // MARK: - Firestore helpers
 
-    func queuedPromptCount() -> Int {
-        loadQueue().count
+    private func enqueue(_ entry: PromptEntry) async {
+        let firestore = Firestore.firestore()
+        let path = FirestoreCollections.PromptQueue(profileID) + "/\(entry.id.uuidString)"
+        do {
+            try await firestore.document(path).setData(entry.toFirestoreData())
+        } catch {
+            logger.error("Failed to enqueue prompt: \(error.localizedDescription)")
+        }
     }
 
-    private func enqueuePrompt(_ text: String) {
-        var queue = loadQueue()
-        queue.append(PromptEntry(id: UUID(), createdAt: Date(), text: text))
-        persistQueue(queue)
+    private func dequeue(id: UUID) async {
+        let firestore = Firestore.firestore()
+        let path = FirestoreCollections.PromptQueue(profileID) + "/\(id.uuidString)"
+        do {
+            try await firestore.document(path).delete()
+        } catch {
+            logger.error("Failed to dequeue prompt \(id): \(error.localizedDescription)")
+        }
     }
 
-    private func dequeuePrompt() -> String? {
-        var queue = loadQueue()
-        guard !queue.isEmpty else { return nil }
-        let first = queue.removeFirst()
-        persistQueue(queue)
-        return first.text
+    private func writeDraft(_ text: String?) async {
+        let firestore = Firestore.firestore()
+        let path = FirestoreCollections.PromptStateDocument(profileID)
+        do {
+            if let text {
+                try await firestore.document(path).setData(["draft": text], merge: true)
+            } else {
+                try await firestore.document(path).setData(["draft": FieldValue.delete()], merge: true)
+            }
+        } catch {
+            logger.error("Failed to write prompt draft: \(error.localizedDescription)")
+        }
     }
+}
 
-    private func loadQueue() -> [PromptEntry] {
-        guard let data = defaults.data(forKey: queueStorageKey) else { return [] }
-        return (try? JSONDecoder().decode([PromptEntry].self, from: data)) ?? []
-    }
+// MARK: - Notification
 
-    private func persistQueue(_ queue: [PromptEntry]) {
-        guard let data = try? JSONEncoder().encode(queue) else { return }
-        defaults.set(data, forKey: queueStorageKey)
-    }
+extension Notification.Name {
+    static let clientPromptWaitRepositoryDidChange = Notification.Name("clientPromptWaitRepositoryDidChange")
 }

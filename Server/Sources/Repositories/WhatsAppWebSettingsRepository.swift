@@ -4,18 +4,18 @@ import Foundation
 final class WhatsAppWebSettingsRepository {
     static let shared = WhatsAppWebSettingsRepository()
 
-    private let defaults: UserDefaults
+    private let settingsService: FirestoreSettingsService
     private let userAgentKey = "whatsAppWeb.customUserAgent"
     private let inspectableKey = "whatsAppWeb.isInspectable"
     private let messageSettleDelayKey = "whatsAppWeb.messageSettleDelayMilliseconds"
     private let pageZoomKey = "whatsAppWeb.pageZoom"
 
-    init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
+    init(settingsService: FirestoreSettingsService = FirestoreSettingsService(profileID: AppProfile.default.id)) {
+        self.settingsService = settingsService
     }
 
     func loadCustomUserAgent(defaultValue: String) -> String {
-        let storedValue = defaults.string(forKey: userAgentKey)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let storedValue = settingsService.string(forKey: userAgentKey)?.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let storedValue, !storedValue.isEmpty else {
             return defaultValue
         }
@@ -24,41 +24,40 @@ final class WhatsAppWebSettingsRepository {
 
     func saveCustomUserAgent(_ value: String) {
         let trimmedValue = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        defaults.set(trimmedValue, forKey: userAgentKey)
+        Task { @MainActor in
+            await settingsService.set(trimmedValue, forKey: userAgentKey)
+        }
     }
 
     func loadInspectable(defaultValue: Bool) -> Bool {
-        if defaults.object(forKey: inspectableKey) == nil {
-            return defaultValue
-        }
-        return defaults.bool(forKey: inspectableKey)
+        settingsService.value(forKey: inspectableKey) as? Bool ?? defaultValue
     }
 
     func saveInspectable(_ value: Bool) {
-        defaults.set(value, forKey: inspectableKey)
+        Task { @MainActor in
+            await settingsService.set(value, forKey: inspectableKey)
+        }
     }
 
     func loadMessageSettleDelay(defaultValue: Double) -> Double {
-        if defaults.object(forKey: messageSettleDelayKey) == nil {
-            return defaultValue
-        }
-        let value = defaults.double(forKey: messageSettleDelayKey)
+        let value = settingsService.double(forKey: messageSettleDelayKey, default: defaultValue)
         return value > 0 ? value : defaultValue
     }
 
     func saveMessageSettleDelay(_ value: Double) {
-        defaults.set(value, forKey: messageSettleDelayKey)
+        Task { @MainActor in
+            await settingsService.set(value, forKey: messageSettleDelayKey)
+        }
     }
 
     func loadPageZoom(defaultValue: Double) -> Double {
-        if defaults.object(forKey: pageZoomKey) == nil {
-            return defaultValue
-        }
-        let value = defaults.double(forKey: pageZoomKey)
+        let value = settingsService.double(forKey: pageZoomKey, default: defaultValue)
         return value > 0 ? value : defaultValue
     }
 
     func savePageZoom(_ value: Double) {
-        defaults.set(value, forKey: pageZoomKey)
+        Task { @MainActor in
+            await settingsService.set(value, forKey: pageZoomKey)
+        }
     }
 }

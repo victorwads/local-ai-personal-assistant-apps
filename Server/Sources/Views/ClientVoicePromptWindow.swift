@@ -70,7 +70,7 @@ struct ClientVoicePromptWindow: View {
         .padding(14)
         .task {
             guard !PreviewSupport.isRunningForPreviews else { return }
-            if let persisted = await appModel.clientPromptWaitRepository.getDraft(), !persisted.isEmpty {
+            if let persisted = await appModel.clientPromptWaitRepository.getDraftAsync(), !persisted.isEmpty {
                 draftResponse = persisted
             }
             startHandsFreeListening()

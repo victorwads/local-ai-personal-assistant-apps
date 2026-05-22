@@ -30,7 +30,7 @@ final class VoiceSettingsModel: ObservableObject {
         experimentalSpeakApiEnabled = true
 
         guard loadPersistedValues else { return }
-        loadStoredSettings()
+        reloadStoredSettings()
         bindPersistence()
     }
 
@@ -66,7 +66,7 @@ final class VoiceSettingsModel: ObservableObject {
             .sorted { $0.identifier < $1.identifier }
     }
 
-    private func loadStoredSettings() {
+    func reloadStoredSettings() {
         let loadedVoiceSettings = voiceSettingsRepository.load()
         speechVoiceIdentifier = loadedVoiceSettings.voiceIdentifier
         speechLanguage = loadedVoiceSettings.language

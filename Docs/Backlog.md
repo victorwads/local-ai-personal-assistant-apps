@@ -161,7 +161,7 @@ Sem uma data real e estruturada, a lista não consegue ser ordenada por recênci
 
 ---
 
-## 6) Exposição externa para app mobile e controle por API
+## 6) Exposição externa para app mobile e controle por API/Firebase
 
 Valor: `V2 - Baixo`
 Risco de Desenvolvimento: `R5 - Muito alto`
@@ -169,20 +169,20 @@ Risco da Feature: `R5 - Muito alto`
 Score de Execução: `0.16`
 
 **Descrição**  
-Externalizar parte da experiência do assistente para uma aplicação mobile ou outra interface cliente, permitindo que o usuário controle a máquina que roda o MCP server e o assistente de forma remota. A ideia é que tanto o fluxo de falar com o cliente quanto o fluxo do cliente responder possam ser acessados por essa camada externa.
+Externalizar parte da experiência do assistente para uma aplicação mobile ou outra interface cliente, com foco em uma experiência voice-first e leve para o usuário final. O mobile deve receber e responder pendências de voz do assistente, mostrar a Home como ponto principal do dia a dia e deixar integrações mais pesadas ou administrativas para fases posteriores.
 
 **Dependências**  
 - `Nenhuma`
 
 **Capacidades desejadas**  
-- Expor uma API para integração com app mobile ou outro cliente externo.
-- Permitir iniciar, acompanhar e controlar interações sem depender só da máquina local.
-- Suportar envio e recebimento de áudio, incluindo gravação e reprodução no dispositivo remoto quando fizer sentido.
-- Permitir reconhecimento de voz no lado do cliente, com possibilidade de usar recursos nativos do iPhone/Android ou um backend como `Whisper`.
-- Manter a máquina principal como origem do contexto, mas com interface externa para operação e resposta.
+- Expor sincronização via Firebase para pendências de voz, estado operacional e histórico recente.
+- Manter uma API direta ou túnel apenas para casos que realmente precisem de acesso pontual ao Mac, como dados sensíveis e chamadas específicas.
+- Permitir envio e recebimento de áudio, incluindo gravação e reprodução no dispositivo remoto quando fizer sentido.
+- Permitir reconhecimento de voz no lado do cliente, com uso dos recursos nativos de Android e iOS para STT/TTS.
+- Manter a máquina principal como origem do contexto, mas com uma interface externa simples para operação e resposta do usuário.
 
 **Por que isso entra no backlog**  
-Isso amplia o alcance do assistente para fora da máquina local e abre caminho para uma experiência mais portátil, principalmente para controlar conversas e áudios pelo celular.
+Isso amplia o alcance do assistente para fora da máquina local e abre caminho para uma experiência portátil e realmente útil no celular, sem exigir que o usuário lide com detalhes de rede ou com a máquina do Mac.
 
 ---
 
@@ -517,5 +517,96 @@ Mudar a base de persistência do projeto para Firebase, centralizando no cloud t
 
 **Por que isso entra no backlog**  
 Isso transforma o assistente em uma plataforma realmente sincronizada e multi-dispositivo, reduz a dependência de APIs próprias para exposição de dados e abre caminho para acesso remoto consistente aos perfis e ao contexto do usuário.
+
+---
+
+## 23) Respostas rápidas sugeridas no `ask_to_client` e no app mobile
+
+Valor: `V4 - Alto`
+Risco de Desenvolvimento: `R3 - Médio`
+Risco da Feature: `R2 - Baixo`
+Score de Execução: `0.62`
+
+**Descrição**  
+Permitir que o `ask_to_client` retorne, além da pergunta principal, um array `suggested_fast_responses` com 2 a 5 respostas curtas, objetivas e prontas para toque. A ideia é que o usuário possa responder sem digitar, tanto dentro do app mobile quanto diretamente por notificação, facilitando respostas rápidas quando o contexto for simples.
+
+**Dependências**  
+- `Exposição externa para app mobile e controle por API/Firebase`
+- `Migrar storage e sincronização para Firebase`
+
+**Comportamento desejado**  
+- O `ask_to_client` pode preencher `suggested_fast_responses` com opções curtas e úteis.
+- O app mobile deve exibir essas respostas rápidas como botões de ação.
+- A notificação do app mobile deve permitir responder rapidamente, sem precisar abrir a app em alguns casos.
+- O usuário ainda deve poder digitar uma resposta manual, se preferir.
+- As respostas rápidas precisam ser curtas, objetivas e derivadas do contexto da pergunta.
+
+**Notas técnicas**  
+- O contrato de `ask_to_client` precisa aceitar esse novo campo de saída sem quebrar o fluxo atual.
+- O app mobile precisa ler essas opções e mapear a seleção para o mesmo canal de resposta do chat original.
+- A feature deve funcionar bem tanto em telas abertas quanto em ações rápidas por notificação.
+- Vale definir um limite máximo de opções para não poluir a UI nem a notificação.
+- O conteúdo sugerido deve ser contextual, mas não deve depender de inferência complexa demais para continuar útil no uso rápido.
+
+**Por que isso entra no backlog**  
+Isso acelera muito o ciclo de resposta do usuário, reduz atrito para mensagens simples e deixa o app mobile mais útil como camada de interação imediata.
+
+---
+
+## 24) MVP do app mobile: Home voice-first
+
+Valor: `V5 - Altíssimo`
+Risco de Desenvolvimento: `R3 - Médio`
+Risco da Feature: `R3 - Médio`
+Score de Execução: `0.67`
+
+**Descrição**  
+Definir e implementar o primeiro recorte real do app Android como uma Home centrada em voz. O MVP deve priorizar `ask_to_client` e `speak_to_client`, com STT/TTS nativos, lista de solicitações de voz pendentes e histórico recente de itens resolvidos. O app não deve expor memórias, issues, nicknames, chats completos, logs ou configurações avançadas nesta fase inicial.
+
+**Dependências**  
+- `Exposição externa para app mobile e controle por API/Firebase`
+- `Migrar storage e sincronização para Firebase`
+
+**Regras desejadas**  
+- A Home deve ser a tela principal e responder imediatamente se existe algo pendente para o usuário.
+- A navegação do MVP deve ser mínima e não incluir áreas administrativas que só poluem a experiência.
+- O fluxo de `ask_to_client` precisa guardar a pendência e o momento de resolução de forma imutável, incluindo a data em que o item foi marcado como handled.
+- O `speak_to_client` deve ser apresentado como feedback de voz direto, sem exigir que o usuário navegue em submenus.
+- O app deve manter suporte a STT e TTS como parte central da experiência.
+- A lista de itens concluídos deve existir para futuro acompanhamento, mas sem competir visualmente com a pendência principal da Home.
+
+**Por que isso entra no backlog**  
+Esse item cristaliza o verdadeiro foco do app mobile no primeiro lançamento: ser a interface de voz do assistente remoto, simples o bastante para familiares usarem sem atrito e clara o suficiente para o desenvolvimento seguir um caminho único.
+
+---
+
+## 25) System tray icon e saída completa do app
+
+Valor: `V4 - Alto`
+Risco de Desenvolvimento: `R3 - Médio`
+Risco da Feature: `R2 - Baixo`
+Score de Execução: `0.62`
+
+**Descrição**  
+Adicionar um ícone de `system tray`/`menu bar` para o app, permitindo controlar o ciclo de vida da aplicação fora das janelas principais. A partir desse ícone, o usuário deve conseguir fechar completamente o app quando quiser. Além disso, quando todas as janelas forem fechadas, o comportamento esperado é que o app saia da `Dock`, permaneça em background e continue acessível pelo ícone da barra de menu.
+
+**Dependências**  
+- `Nenhuma`
+
+**Comportamento desejado**  
+- Exibir um ícone na barra de menu do macOS.
+- Permitir encerrar o app completamente por esse ícone, sem depender de janelas abertas.
+- Quando todas as janelas forem fechadas, o app não deve necessariamente encerrar; ele pode continuar rodando em background.
+- O app deve sair da `Dock` quando não houver janelas visíveis.
+- O ícone da barra de menu deve continuar oferecendo acesso ao estado e às ações básicas da aplicação.
+
+**Notas técnicas**  
+- Esse item envolve ajustar o comportamento padrão de `NSApplication` para coexistir com janela fechada, background e saída explícita.
+- A implementação precisa separar “fechar janelas” de “encerrar o processo”.
+- O ícone da barra de menu deve ser uma fonte confiável para reabrir ou encerrar o app.
+- Vale prever uma decisão clara sobre quando o app deve voltar a aparecer na `Dock` ao reabrir uma janela.
+
+**Por que isso entra no backlog**  
+Isso deixa o app mais alinhado com o comportamento esperado de apps macOS residentes, dá controle real de encerramento e evita que o usuário fique preso ao ciclo das janelas.
 
 ---

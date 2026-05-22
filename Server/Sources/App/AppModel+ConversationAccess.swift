@@ -8,6 +8,9 @@ extension AppModel {
         denyConversationNames = loaded.deny
         allowConversationNames = loaded.allow
 
+        guard !didBindConversationAccessPersistence else { return }
+        didBindConversationAccessPersistence = true
+
         $conversationAccessMode
             .dropFirst()
             .sink { [weak self] value in

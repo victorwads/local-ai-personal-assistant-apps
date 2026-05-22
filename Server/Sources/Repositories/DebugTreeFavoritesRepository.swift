@@ -4,36 +4,27 @@ import Foundation
 final class DebugTreeFavoritesRepository {
     static let shared = DebugTreeFavoritesRepository()
 
-    private let defaults: UserDefaults
+    private let settingsService: FirestoreSettingsService
     private let storageKey = "debugTreeFavoritesV1"
 
-    init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
+    init(settingsService: FirestoreSettingsService = FirestoreSettingsService(profileID: AppProfile.default.id)) {
+        self.settingsService = settingsService
     }
 
     func load() -> [String: [Int]] {
-        if let data = defaults.data(forKey: storageKey) {
-            if let decoded = try? JSONDecoder().decode([String: [Int]].self, from: data) {
-                return decoded
-            }
+        guard let data = settingsService.data(forKey: storageKey),
+              let decoded = try? JSONDecoder().decode([String: [Int]].self, from: data) else {
             return [:]
         }
-
-        if let legacyString = defaults.string(forKey: storageKey) {
-            let data = Data(legacyString.utf8)
-            if let decoded = try? JSONDecoder().decode([String: [Int]].self, from: data) {
-                defaults.set(data, forKey: storageKey)
-                return decoded
-            }
-        }
-
-        return [:]
+        return decoded
     }
 
     func save(_ favorites: [String: [Int]]) {
         guard let data = try? JSONEncoder().encode(favorites) else {
             return
         }
-        defaults.set(data, forKey: storageKey)
+        Task { @MainActor in
+            await settingsService.set(data, forKey: storageKey)
+        }
     }
 }

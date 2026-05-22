@@ -1,4 +1,6 @@
 import Foundation
+import FirebaseFirestore
+import os
 
 enum NicknamesRepositoryError: LocalizedError {
     case missingParameter(String)
@@ -15,22 +17,55 @@ enum NicknamesRepositoryError: LocalizedError {
 }
 
 actor NicknamesRepository {
-    static let shared = NicknamesRepository()
-
     struct SaveResult: Codable, Equatable {
         let entry: NicknameEntry
         let created: Bool
     }
 
-    private let defaults: UserDefaults
-    private let storageKey = "nicknames.v1"
+    private let profileID: String
+    private var entries: [NicknameEntry] = []
+    private var listenerRegistration: ListenerRegistrationWrapper?
+    private let logger = Logger(subsystem: "dev.wads.AssistantMCPServer", category: "NicknamesRepository")
 
-    init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
+    init(profileID: String) {
+        self.profileID = profileID
+    }
+
+    func startListening() {
+        let firestore = Firestore.firestore()
+        let path = FirestoreCollections.Nicknames(profileID)
+        
+        let registration = firestore.collection(path).addSnapshotListener { [weak self] snapshot, error in
+            guard let self = self else { return }
+            guard let snapshot = snapshot else {
+                if let error = error {
+                    self.logger.error("Error listening to nicknames: \(error.localizedDescription)")
+                }
+                return
+            }
+            
+            var newEntries: [NicknameEntry] = []
+            for document in snapshot.documents {
+                if let entry = NicknameEntry.fromFirestoreData(document.data()) {
+                    newEntries.append(entry)
+                }
+            }
+            
+            Task {
+                await self.updateEntries(newEntries)
+            }
+        }
+        
+        self.listenerRegistration = ListenerRegistrationWrapper(registration)
+    }
+
+    private func updateEntries(_ newEntries: [NicknameEntry]) {
+        self.entries = newEntries
+        NotificationCenter.default.post(name: .nicknamesRepositoryDidChange, object: nil)
     }
 
     func list(query: String? = nil) -> [NicknameEntry] {
-        let all = loadAll()
+        let all = entries
 
         let trimmedQuery = (query ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedQuery.isEmpty else {
@@ -73,7 +108,7 @@ actor NicknamesRepository {
             .sorted { $0.createdAt > $1.createdAt }
     }
 
-    func save(originalName: String?, chatId: String?, nickname: String?) throws -> SaveResult {
+    func save(originalName: String?, chatId: String?, nickname: String?) async throws -> SaveResult {
         let trimmedOriginalName = (originalName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmedOriginalName.isEmpty {
             throw NicknamesRepositoryError.missingParameter("originalName")
@@ -86,31 +121,31 @@ actor NicknamesRepository {
 
         let trimmedChatId = normalizedOptionalString(chatId)
 
-        var entries = loadAll()
-        if let index = entries.firstIndex(where: {
+        let all = entries
+        if let index = all.firstIndex(where: {
             normalizedNicknameSearchText($0.originalName) == normalizedNicknameSearchText(trimmedOriginalName)
                 && normalizedNicknameSearchText($0.nickname) == normalizedNicknameSearchText(trimmedNickname)
                 && normalizedOptionalString($0.chatId) == trimmedChatId
         }) {
-            return SaveResult(entry: entries[index], created: false)
+            return SaveResult(entry: all[index], created: false)
         }
 
-        if let index = entries.firstIndex(where: {
+        if let index = all.firstIndex(where: {
             normalizedNicknameSearchText($0.originalName) == normalizedNicknameSearchText(trimmedOriginalName)
                 && normalizedNicknameSearchText($0.nickname) == normalizedNicknameSearchText(trimmedNickname)
         }) {
-            if entries[index].chatId == nil, let trimmedChatId {
-                entries[index] = NicknameEntry(
-                    id: entries[index].id,
-                    originalName: entries[index].originalName,
-                    nickname: entries[index].nickname,
+            if all[index].chatId == nil, let trimmedChatId {
+                let updatedEntry = NicknameEntry(
+                    id: all[index].id,
+                    originalName: all[index].originalName,
+                    nickname: all[index].nickname,
                     chatId: trimmedChatId,
-                    createdAt: entries[index].createdAt
+                    createdAt: all[index].createdAt
                 )
-                persistAll(entries)
-                return SaveResult(entry: entries[index], created: false)
+                try await persistEntry(updatedEntry)
+                return SaveResult(entry: updatedEntry, created: false)
             }
-            return SaveResult(entry: entries[index], created: false)
+            return SaveResult(entry: all[index], created: false)
         }
 
         let entry = NicknameEntry(
@@ -120,39 +155,26 @@ actor NicknamesRepository {
             chatId: trimmedChatId,
             createdAt: Date()
         )
-        entries.append(entry)
-        persistAll(entries)
+        try await persistEntry(entry)
         return SaveResult(entry: entry, created: true)
     }
 
-    func delete(id: UUID?) throws -> Bool {
+    func delete(id: UUID?) async throws -> Bool {
         guard let id else {
             throw NicknamesRepositoryError.missingParameter("id")
         }
 
-        var entries = loadAll()
-        let originalCount = entries.count
-        entries.removeAll { $0.id == id }
-        guard entries.count != originalCount else {
-            return false
-        }
-        persistAll(entries)
+        let firestore = Firestore.firestore()
+
+        let path = FirestoreCollections.Nicknames(profileID) + "/\(id.uuidString)"
+        try await firestore.document(path).delete()
         return true
     }
 
-    private func loadAll() -> [NicknameEntry] {
-        guard let data = defaults.data(forKey: storageKey) else {
-            return []
-        }
-        return (try? JSONDecoder().decode([NicknameEntry].self, from: data)) ?? []
-    }
-
-    private func persistAll(_ entries: [NicknameEntry]) {
-        guard let data = try? JSONEncoder().encode(entries) else {
-            return
-        }
-        defaults.set(data, forKey: storageKey)
-        NotificationCenter.default.post(name: .nicknamesRepositoryDidChange, object: nil)
+    private func persistEntry(_ entry: NicknameEntry) async throws {
+        let firestore = Firestore.firestore()
+        let path = FirestoreCollections.Nicknames(profileID) + "/\(entry.id.uuidString)"
+        try await firestore.document(path).setData(entry.toFirestoreData(), merge: true)
     }
 
     private func normalizedNicknameSearchText(_ value: String) -> String {
@@ -166,3 +188,4 @@ actor NicknamesRepository {
         return trimmed.isEmpty ? nil : trimmed
     }
 }
+

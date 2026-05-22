@@ -1,4 +1,6 @@
 import Foundation
+import FirebaseFirestore
+import os
 
 enum MemoriesRepositoryError: LocalizedError {
     case missingParameter(String)
@@ -15,24 +17,56 @@ enum MemoriesRepositoryError: LocalizedError {
 }
 
 actor MemoriesRepository {
-    static let shared = MemoriesRepository()
-
     struct SaveResult: Equatable {
         let entry: MemoryEntry
         let created: Bool
         let updated: Bool
     }
 
-    private let defaults: UserDefaults
-    private let storageKey = "memories.v1"
+    private let profileID: String
+    private var entries: [MemoryEntry] = []
+    private var listenerRegistration: ListenerRegistrationWrapper?
+    private let logger = Logger(subsystem: "dev.wads.AssistantMCPServer", category: "MemoriesRepository")
 
-    init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
+    init(profileID: String) {
+        self.profileID = profileID
+    }
+
+    func startListening() {
+        let firestore = Firestore.firestore()
+        let path = FirestoreCollections.Memories(profileID)
+        
+        let registration = firestore.collection(path).addSnapshotListener { [weak self] snapshot, error in
+            guard let self = self else { return }
+            guard let snapshot = snapshot else {
+                if let error = error {
+                    self.logger.error("Error listening to memories: \(error.localizedDescription)")
+                }
+                return
+            }
+            
+            var newEntries: [MemoryEntry] = []
+            for document in snapshot.documents {
+                if let entry = MemoryEntry.fromFirestoreData(document.data()) {
+                    newEntries.append(entry)
+                }
+            }
+            
+            Task {
+                await self.updateEntries(newEntries)
+            }
+        }
+        
+        self.listenerRegistration = ListenerRegistrationWrapper(registration)
+    }
+
+    private func updateEntries(_ newEntries: [MemoryEntry]) {
+        self.entries = newEntries
+        NotificationCenter.default.post(name: .memoriesRepositoryDidChange, object: nil)
     }
 
     func list() -> [MemoryEntry] {
-        loadAll()
-            .sorted { $0.updatedAt > $1.updatedAt }
+        entries.sorted { $0.updatedAt > $1.updatedAt }
     }
 
     func get(key: String?) throws -> MemoryEntry {
@@ -41,7 +75,7 @@ actor MemoriesRepository {
             throw MemoriesRepositoryError.missingParameter("key")
         }
 
-        guard let found = loadAll().first(where: { $0.key == trimmedKey }) else {
+        guard let found = entries.first(where: { $0.key.lowercased() == trimmedKey.lowercased() }) else {
             throw MemoriesRepositoryError.invalidParameter("Memory not found")
         }
 
@@ -50,7 +84,7 @@ actor MemoriesRepository {
 
     func search(query: String?, limit: Int = 3) -> [MemorySearchResult] {
         let trimmedQuery = (query ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        let all = loadAll()
+        let all = entries
 
         if trimmedQuery.isEmpty {
             return all
@@ -77,7 +111,7 @@ actor MemoriesRepository {
         return Array(ranked.prefix(max(1, limit)))
     }
 
-    func save(key: String?, content: String?) throws -> SaveResult {
+    func save(key: String?, content: String?) async throws -> SaveResult {
         let trimmedKey = (key ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmedKey.isEmpty {
             throw MemoriesRepositoryError.missingParameter("key")
@@ -88,10 +122,10 @@ actor MemoriesRepository {
             throw MemoriesRepositoryError.missingParameter("content")
         }
 
-        var all = loadAll()
+        let all = entries
         let now = Date()
 
-        let matchingIndexes = all.indices.filter { all[$0].key == trimmedKey }
+        let matchingIndexes = all.indices.filter { all[$0].key.lowercased() == trimmedKey.lowercased() }
         if let firstIndex = matchingIndexes.first {
             let existing = all[firstIndex]
             let updatedEntry = MemoryEntry(
@@ -101,13 +135,8 @@ actor MemoriesRepository {
                 createdAt: existing.createdAt,
                 updatedAt: now
             )
-            all[firstIndex] = updatedEntry
-
-            for duplicateIndex in matchingIndexes.dropFirst().sorted(by: >) {
-                all.remove(at: duplicateIndex)
-            }
-
-            persistAll(all)
+            
+            try await persistEntry(updatedEntry)
             return SaveResult(entry: updatedEntry, created: false, updated: true)
         }
 
@@ -118,54 +147,38 @@ actor MemoriesRepository {
             createdAt: now,
             updatedAt: now
         )
-        all.append(entry)
-        persistAll(all)
+        try await persistEntry(entry)
         return SaveResult(entry: entry, created: true, updated: false)
     }
 
-    func delete(id: UUID?) throws -> Bool {
+    func delete(id: UUID?) async throws -> Bool {
         guard let id else {
             throw MemoriesRepositoryError.missingParameter("id")
         }
 
-        var all = loadAll()
-        let originalCount = all.count
-        all.removeAll { $0.id == id }
-        guard all.count != originalCount else {
-            return false
-        }
-        persistAll(all)
+        let firestore = Firestore.firestore()
+
+        let path = FirestoreCollections.Memories(profileID) + "/\(id.uuidString)"
+        try await firestore.document(path).delete()
         return true
     }
 
-    func delete(key: String?) throws -> Bool {
+    func delete(key: String?) async throws -> Bool {
         let trimmedKey = (key ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmedKey.isEmpty {
             throw MemoriesRepositoryError.missingParameter("key")
         }
 
-        var all = loadAll()
-        let originalCount = all.count
-        all.removeAll { $0.key == trimmedKey }
-        guard all.count != originalCount else {
+        guard let found = entries.first(where: { $0.key.lowercased() == trimmedKey.lowercased() }) else {
             return false
         }
-        persistAll(all)
-        return true
+        
+        return try await delete(id: found.id)
     }
 
-    private func loadAll() -> [MemoryEntry] {
-        guard let data = defaults.data(forKey: storageKey) else {
-            return []
-        }
-        return (try? JSONDecoder().decode([MemoryEntry].self, from: data)) ?? []
-    }
-
-    private func persistAll(_ entries: [MemoryEntry]) {
-        guard let data = try? JSONEncoder().encode(entries) else {
-            return
-        }
-        defaults.set(data, forKey: storageKey)
-        NotificationCenter.default.post(name: .memoriesRepositoryDidChange, object: nil)
+    private func persistEntry(_ entry: MemoryEntry) async throws {
+        let firestore = Firestore.firestore()
+        let path = FirestoreCollections.Memories(profileID) + "/\(entry.id.uuidString)"
+        try await firestore.document(path).setData(entry.toFirestoreData(), merge: true)
     }
 }

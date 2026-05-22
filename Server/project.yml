@@ -14,6 +14,9 @@ packages:
   swift-sdk:
     url: https://github.com/modelcontextprotocol/swift-sdk.git
     from: 0.12.1
+  firebase-ios-sdk:
+    url: https://github.com/firebase/firebase-ios-sdk.git
+    from: 12.13.0
   yams:
     url: https://github.com/jpsim/Yams.git
     from: 5.1.3
@@ -40,20 +43,30 @@ targets:
         buildPhase: resources
       - path: "Resources/whatsapp_native_selectors.yaml"
         buildPhase: resources
-    resources:
-      - path: "Sources/Assets.xcassets"
-      - path: "plugins/lmstudio/Assistant System prompt.md"
+      - path: "Resources/GoogleService-Info.plist"
+        buildPhase: resources
+      - path: "Integrations/lmstudio/Assistant System prompt.md"
         buildPhase: resources
     dependencies:
       - package: swift-sdk
         product: MCP
+      - package: firebase-ios-sdk
+        product: FirebaseCore
+      - package: firebase-ios-sdk
+        product: FirebaseAuth
+      - package: firebase-ios-sdk
+        product: FirebaseFirestore
+      - package: firebase-ios-sdk
+        product: FirebaseStorage
       - package: yams
         product: Yams
     settings:
       base:
         INFOPLIST_FILE: Sources/Info.plist
         CODE_SIGN_STYLE: Automatic
-        CODE_SIGN_IDENTITY: "-"
+        DEVELOPMENT_TEAM: DU6489YN3U
+        CODE_SIGN_IDENTITY: Apple Development
+        CODE_SIGN_ENTITLEMENTS: Sources/AssistantMCPServer.entitlements
         SWIFT_VERSION: 6.0
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         DEAD_CODE_STRIPPING: YES

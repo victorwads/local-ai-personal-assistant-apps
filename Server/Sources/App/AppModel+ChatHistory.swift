@@ -2,20 +2,23 @@ import Foundation
 
 extension AppModel {
     func loadChatHistory() {
-        do {
-            guard let payload = try chatHistoryRepository.load() else {
-                return
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                guard let payload = try await chatHistoryRepository.load() else {
+                    return
+                }
+                let migratedPayload = migratePersistedChatHistory(payload)
+                let allowedChatStatesByChatId = migratedPayload.chatStatesByChatId.filter { !self.isBlocked($0.value.chat.name) }
+                self.memoryStore.replaceAllChatStates(allowedChatStatesByChatId)
+                self.appendLog("Loaded persisted chat history for \(allowedChatStatesByChatId.count) chats.")
+                if migratedPayload != payload {
+                    try await chatHistoryRepository.save(migratedPayload)
+                    self.appendLog("Migrated persisted chat history to canonical chat IDs.")
+                }
+            } catch {
+                self.appendLog("Failed to load persisted chat history: \(error.localizedDescription)", level: .warning)
             }
-            let migratedPayload = migratePersistedChatHistory(payload)
-            let allowedChatStatesByChatId = migratedPayload.chatStatesByChatId.filter { !isBlocked($0.value.chat.name) }
-            memoryStore.replaceAllChatStates(allowedChatStatesByChatId)
-            appendLog("Loaded persisted chat history for \(allowedChatStatesByChatId.count) chats.")
-            if migratedPayload != payload {
-                try chatHistoryRepository.save(migratedPayload)
-                appendLog("Migrated persisted chat history to canonical chat IDs.")
-            }
-        } catch {
-            appendLog("Failed to load persisted chat history: \(error.localizedDescription)", level: .warning)
         }
     }
 
@@ -47,7 +50,7 @@ extension AppModel {
         )
 
         do {
-            try chatHistoryRepository.save(payload)
+            try await chatHistoryRepository.save(payload)
         } catch {
             appendLog("Failed to persist chat history: \(error.localizedDescription)", level: .warning)
         }

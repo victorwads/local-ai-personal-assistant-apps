@@ -1,4 +1,5 @@
 import Foundation
+import FirebaseFirestore
 
 struct NicknameEntry: Identifiable, Codable, Equatable {
     let id: UUID
@@ -43,3 +44,37 @@ struct NicknameEntry: Identifiable, Codable, Equatable {
         try container.encode(createdAt, forKey: .createdAt)
     }
 }
+
+extension NicknameEntry {
+    static func fromFirestoreData(_ data: [String: Any]) -> NicknameEntry? {
+        guard let idString = data["id"] as? String,
+              let id = UUID(uuidString: idString),
+              let originalName = data["originalName"] as? String,
+              let nickname = data["nickname"] as? String else {
+            return nil
+        }
+        let chatId = data["chatId"] as? String
+        
+        let createdAt: Date
+        if let ts = data["createdAt"] as? Timestamp {
+            createdAt = ts.dateValue()
+        } else if let tsString = data["createdAt"] as? String, let date = ISO8601DateFormatter().date(from: tsString) {
+            createdAt = date
+        } else {
+            createdAt = Date()
+        }
+        
+        return NicknameEntry(id: id, originalName: originalName, nickname: nickname, chatId: chatId, createdAt: createdAt)
+    }
+    
+    func toFirestoreData() -> [String: Any] {
+        return [
+            "id": id.uuidString,
+            "originalName": originalName,
+            "nickname": nickname,
+            "chatId": chatId as Any,
+            "createdAt": Timestamp(date: createdAt)
+        ]
+    }
+}
+

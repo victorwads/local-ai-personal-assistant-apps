@@ -1,4 +1,5 @@
 import Foundation
+import FirebaseFirestore
 
 enum MessageDirection: String, Codable, Equatable {
     case incoming
@@ -177,3 +178,112 @@ extension Message {
             .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
     }
 }
+
+extension Message {
+    static func fromFirestoreData(_ data: [String: Any]) -> Message? {
+        guard let id = data["id"] as? String,
+              let chatId = data["chatId"] as? String else {
+            return nil
+        }
+        
+        let direction: MessageDirection
+        if let dirStr = data["direction"] as? String {
+            direction = MessageDirection(rawValue: dirStr) ?? .unknown
+        } else {
+            direction = .unknown
+        }
+        
+        let kind: MessageKind
+        if let kindStr = data["kind"] as? String {
+            kind = MessageKind(rawValue: kindStr) ?? .unknown
+        } else {
+            kind = .unknown
+        }
+        
+        let authorName = data["authorName"] as? String
+        
+        let origin: MessageOrigin
+        if let origStr = data["origin"] as? String {
+            origin = MessageOrigin(rawValue: origStr) ?? .unknown
+        } else {
+            origin = .unknown
+        }
+        
+        let text = data["text"] as? String
+        let durationSeconds = data["durationSeconds"] as? Double
+        
+        let timestamp: Date?
+        if let ts = data["timestamp"] as? Timestamp {
+            timestamp = ts.dateValue()
+        } else if let tsString = data["timestamp"] as? String, let date = ISO8601DateFormatter().date(from: tsString) {
+            timestamp = date
+        } else {
+            timestamp = nil
+        }
+        
+        let status: MessageStatus
+        if let statusStr = data["status"] as? String {
+            status = MessageStatus(rawValue: statusStr) ?? .unknown
+        } else {
+            status = .unknown
+        }
+        
+        let rawAccessibilityText = data["rawAccessibilityText"] as? String ?? ""
+        let whatsappTimestampText = data["whatsappTimestampText"] as? String
+        
+        let ingestedAt: Date?
+        if let ts = data["ingestedAt"] as? Timestamp {
+            ingestedAt = ts.dateValue()
+        } else if let tsString = data["ingestedAt"] as? String, let date = ISO8601DateFormatter().date(from: tsString) {
+            ingestedAt = date
+        } else {
+            ingestedAt = nil
+        }
+        
+        let handledAt: Date?
+        if let ts = data["handledAt"] as? Timestamp {
+            handledAt = ts.dateValue()
+        } else if let tsString = data["handledAt"] as? String, let date = ISO8601DateFormatter().date(from: tsString) {
+            handledAt = date
+        } else {
+            handledAt = nil
+        }
+        
+        return Message(
+            id: id,
+            chatId: chatId,
+            direction: direction,
+            kind: kind,
+            authorName: authorName,
+            origin: origin,
+            text: text,
+            durationSeconds: durationSeconds,
+            timestamp: timestamp,
+            status: status,
+            rawAccessibilityText: rawAccessibilityText,
+            whatsappTimestampText: whatsappTimestampText,
+            ingestedAt: ingestedAt,
+            handledAt: handledAt
+        )
+    }
+    
+    func toFirestoreData() -> [String: Any] {
+        return [
+            "id": id,
+            "chatId": chatId,
+            "direction": direction.rawValue,
+            "kind": kind.rawValue,
+            "authorName": authorName as Any,
+            "origin": origin.rawValue,
+            "text": text as Any,
+            "durationSeconds": durationSeconds as Any,
+            "timestamp": timestamp != nil ? Timestamp(date: timestamp!) : Any?.none as Any,
+            "status": status.rawValue,
+            "rawAccessibilityText": rawAccessibilityText,
+            "whatsappTimestampText": whatsappTimestampText as Any,
+            "ingestedAt": ingestedAt != nil ? Timestamp(date: ingestedAt!) : Any?.none as Any,
+            "handledAt": handledAt != nil ? Timestamp(date: handledAt!) : Any?.none as Any
+        ]
+    }
+}
+

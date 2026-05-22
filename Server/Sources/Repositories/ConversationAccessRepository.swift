@@ -4,19 +4,19 @@ import Foundation
 final class ConversationAccessRepository {
     static let shared = ConversationAccessRepository()
 
-    private let defaults: UserDefaults
+    private let settingsService: FirestoreSettingsService
 
     private let conversationAccessModeDefaultsKey = "conversationAccessMode.v1"
     private let denyConversationNamesDefaultsKey = "denyConversationNames.v1"
     private let allowConversationNamesDefaultsKey = "allowConversationNames.v1"
 
-    init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
+    init(settingsService: FirestoreSettingsService = FirestoreSettingsService(profileID: AppProfile.default.id)) {
+        self.settingsService = settingsService
     }
 
     func load() -> (mode: ConversationAccessMode, deny: [String], allow: [String]) {
         let mode: ConversationAccessMode = {
-            if let raw = defaults.string(forKey: conversationAccessModeDefaultsKey),
+            if let raw = settingsService.string(forKey: conversationAccessModeDefaultsKey),
                let decoded = ConversationAccessMode(rawValue: raw) {
                 return decoded
             }
@@ -24,20 +24,22 @@ final class ConversationAccessRepository {
         }()
 
         let deny: [String] = {
-            if let deny = defaults.stringArray(forKey: denyConversationNamesDefaultsKey) {
+            if let deny = settingsService.value(forKey: denyConversationNamesDefaultsKey) as? [String] {
                 return deny.sorted()
             }
 
             return []
         }()
 
-        let allow = (defaults.stringArray(forKey: allowConversationNamesDefaultsKey) ?? []).sorted()
+        let allow = ((settingsService.value(forKey: allowConversationNamesDefaultsKey) as? [String]) ?? []).sorted()
         return (mode: mode, deny: deny, allow: allow)
     }
 
     func save(mode: ConversationAccessMode, deny: [String], allow: [String]) {
-        defaults.set(mode.rawValue, forKey: conversationAccessModeDefaultsKey)
-        defaults.set(deny, forKey: denyConversationNamesDefaultsKey)
-        defaults.set(allow, forKey: allowConversationNamesDefaultsKey)
+        Task { @MainActor in
+            await settingsService.set(mode.rawValue, forKey: conversationAccessModeDefaultsKey)
+            await settingsService.set(deny, forKey: denyConversationNamesDefaultsKey)
+            await settingsService.set(allow, forKey: allowConversationNamesDefaultsKey)
+        }
     }
 }

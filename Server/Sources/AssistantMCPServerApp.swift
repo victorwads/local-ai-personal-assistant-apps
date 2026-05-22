@@ -1,27 +1,13 @@
 import SwiftUI
 
 @main
+@MainActor
 struct AssistantMCPServerApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @StateObject private var appModel: AppModel
-
-    init() {
-        let storedBasePort = UserDefaults.standard.integer(forKey: "mcpServer.basePort.v1")
-        let basePort = (1024...65535).contains(storedBasePort) ? storedBasePort : 8080
-        _appModel = StateObject(wrappedValue: AppModel(
-            profile: .default,
-            profileIndex: 0,
-            basePort: basePort,
-            primaryWhatsAppWebAccountId: nil,
-            startupMode: .home
-        ))
-    }
 
     var body: some Scene {
         Window("Profiles", id: "profiles") {
-            ProfilesHomeScreen()
-                .environmentObject(appModel)
-                .frame(minWidth: 980, minHeight: 680)
+            RootView()
         }
         .windowStyle(.titleBar)
         .commands {

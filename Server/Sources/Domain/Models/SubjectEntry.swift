@@ -1,4 +1,5 @@
 import Foundation
+import FirebaseFirestore
 
 enum SubjectStatus: String, Codable, CaseIterable {
     case active
@@ -193,3 +194,147 @@ struct EventEntry: Codable, Equatable {
         self.author = author
     }
 }
+
+extension EventEntry {
+    static func fromFirestoreData(_ data: [String: Any]) -> EventEntry? {
+        guard let idString = data["id"] as? String,
+              let id = UUID(uuidString: idString),
+              let description = data["description"] as? String else {
+            return nil
+        }
+        
+        let timestamp: Date
+        if let ts = data["timestamp"] as? Timestamp {
+            timestamp = ts.dateValue()
+        } else if let tsString = data["timestamp"] as? String, let date = ISO8601DateFormatter().date(from: tsString) {
+            timestamp = date
+        } else {
+            timestamp = Date()
+        }
+        
+        let source = data["source"] as? String
+        let author = data["author"] as? String
+        
+        return EventEntry(id: id, timestamp: timestamp, description: description, source: source, author: author)
+    }
+    
+    func toFirestoreData() -> [String: Any] {
+        return [
+            "id": id.uuidString,
+            "timestamp": Timestamp(date: timestamp),
+            "description": description,
+            "source": source as Any,
+            "author": author as Any
+        ]
+    }
+}
+
+extension SubjectEntry {
+    static func fromFirestoreData(_ data: [String: Any]) -> SubjectEntry? {
+        guard let idString = data["id"] as? String,
+              let id = UUID(uuidString: idString),
+              let title = data["title"] as? String,
+              let summary = data["summary"] as? String,
+              let initialRequest = data["initialRequest"] as? String else {
+            return nil
+        }
+        
+        let stopCondition = data["stopCondition"] as? String ?? ""
+        let details = data["details"] as? String
+        
+        let status: SubjectStatus
+        if let statusRaw = data["status"] as? String, let parsedStatus = SubjectStatus(rawValue: statusRaw) {
+            status = parsedStatus
+        } else if let statusRaw = data["status"] as? String {
+            if statusRaw == "finished" || statusRaw == "resolved" {
+                status = .resolved
+            } else if statusRaw == "cancelled" || statusRaw == "canceled" {
+                status = .canceled
+            } else {
+                status = .active
+            }
+        } else {
+            status = .active
+        }
+        
+        let priority = data["priority"] as? Int ?? 0
+        let participants = data["participants"] as? [String] ?? []
+        let nextSteps = data["nextSteps"] as? [String] ?? []
+        
+        var eventLog: [EventEntry] = []
+        if let logDataArray = data["eventLog"] as? [[String: Any]] {
+            for logData in logDataArray {
+                if let event = EventEntry.fromFirestoreData(logData) {
+                    eventLog.append(event)
+                }
+            }
+        }
+        
+        let whatsappChatId = data["whatsappChatId"] as? String
+        let whatsappAfterMessageId = data["whatsappAfterMessageId"] as? String
+        let gmailThreadId = data["gmailThreadId"] as? String
+        let calendarEventId = data["calendarEventId"] as? String
+        
+        let createdAt: Date
+        if let ts = data["createdAt"] as? Timestamp {
+            createdAt = ts.dateValue()
+        } else if let tsString = data["createdAt"] as? String, let date = ISO8601DateFormatter().date(from: tsString) {
+            createdAt = date
+        } else {
+            createdAt = Date()
+        }
+        
+        let updatedAt: Date
+        if let ts = data["updatedAt"] as? Timestamp {
+            updatedAt = ts.dateValue()
+        } else if let tsString = data["updatedAt"] as? String, let date = ISO8601DateFormatter().date(from: tsString) {
+            updatedAt = date
+        } else {
+            updatedAt = createdAt
+        }
+        
+        return SubjectEntry(
+            id: id,
+            title: title,
+            summary: summary,
+            initialRequest: initialRequest,
+            stopCondition: stopCondition,
+            details: details,
+            status: status,
+            priority: priority,
+            participants: participants,
+            nextSteps: nextSteps,
+            eventLog: eventLog,
+            whatsappChatId: whatsappChatId,
+            whatsappAfterMessageId: whatsappAfterMessageId,
+            gmailThreadId: gmailThreadId,
+            calendarEventId: calendarEventId,
+            createdAt: createdAt,
+            updatedAt: updatedAt
+        )
+    }
+    
+    func toFirestoreData() -> [String: Any] {
+        let logDataArray = eventLog.map { $0.toFirestoreData() }
+        return [
+            "id": id.uuidString,
+            "title": title,
+            "summary": summary,
+            "initialRequest": initialRequest,
+            "stopCondition": stopCondition,
+            "details": details as Any,
+            "status": status.rawValue,
+            "priority": priority,
+            "participants": participants,
+            "nextSteps": nextSteps,
+            "eventLog": logDataArray,
+            "whatsappChatId": whatsappChatId as Any,
+            "whatsappAfterMessageId": whatsappAfterMessageId as Any,
+            "gmailThreadId": gmailThreadId as Any,
+            "calendarEventId": calendarEventId as Any,
+            "createdAt": Timestamp(date: createdAt),
+            "updatedAt": Timestamp(date: updatedAt)
+        ]
+    }
+}
+

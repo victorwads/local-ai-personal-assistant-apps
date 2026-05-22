@@ -16,11 +16,11 @@ final class DeveloperModeSettingsModel: ObservableObject {
         isEnabled = false
 
         guard loadPersistedValues else { return }
-        loadStoredValue()
+        reloadStoredValue()
         bindPersistence()
     }
 
-    private func loadStoredValue() {
+    func reloadStoredValue() {
         isEnabled = repository.load()
     }
 
@@ -33,4 +33,3 @@ final class DeveloperModeSettingsModel: ObservableObject {
             .store(in: &cancellables)
     }
 }
-

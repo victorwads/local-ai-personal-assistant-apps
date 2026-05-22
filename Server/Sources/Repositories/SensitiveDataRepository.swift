@@ -23,7 +23,7 @@ actor SensitiveDataRepository {
         let updated: Bool
     }
 
-    private struct Store: Codable {
+    struct Store: Codable {
         var entries: [SensitiveDataEntry]
         var audits: [SensitiveDataAuditEntry]
     }
@@ -36,6 +36,10 @@ actor SensitiveDataRepository {
 
     func peekEntries() -> [SensitiveDataEntry] {
         loadStore().entries.sorted { $0.updatedAt > $1.updatedAt }
+    }
+
+    func peekMigrationSnapshot() -> Store {
+        loadStore()
     }
 
     func list(subjectId: String?, reason: String?) throws -> [SensitiveDataEntry] {

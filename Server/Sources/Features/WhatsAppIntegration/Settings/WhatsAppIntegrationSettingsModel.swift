@@ -18,7 +18,7 @@ final class WhatsAppIntegrationSettingsModel: ObservableObject {
         mode = Self.defaultMode
 
         guard loadPersistedValues else { return }
-        mode = repository.loadMode(defaultValue: Self.defaultMode)
+        reloadStoredValue()
         $mode
             .dropFirst()
             .sink { [weak self] value in
@@ -26,5 +26,8 @@ final class WhatsAppIntegrationSettingsModel: ObservableObject {
             }
             .store(in: &cancellables)
     }
-}
 
+    func reloadStoredValue() {
+        mode = repository.loadMode(defaultValue: Self.defaultMode)
+    }
+}

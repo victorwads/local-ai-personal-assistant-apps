@@ -2,19 +2,20 @@ import Foundation
 
 @MainActor
 final class DeveloperModeSettingsRepository {
-    private let defaults: UserDefaults
+    private let settingsService: FirestoreSettingsService
     private let storageKey = "developerModeEnabled.v1"
 
-    init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
+    init(settingsService: FirestoreSettingsService = FirestoreSettingsService(profileID: AppProfile.default.id)) {
+        self.settingsService = settingsService
     }
 
     func load() -> Bool {
-        defaults.bool(forKey: storageKey)
+        settingsService.value(forKey: storageKey) as? Bool ?? false
     }
 
     func save(_ enabled: Bool) {
-        defaults.set(enabled, forKey: storageKey)
+        Task { @MainActor in
+            await settingsService.set(enabled, forKey: storageKey)
+        }
     }
 }
-

@@ -13,8 +13,6 @@ final class ProfileWindowManager: NSObject, ObservableObject, NSWindowDelegate {
     private var controllersByProfileId: [String: NSWindowController] = [:]
     private var appModelsByProfileId: [String: AppModel] = [:]
     private var profileIdsByWindowId: [ObjectIdentifier: String] = [:]
-    private weak var homeWindow: NSWindow?
-    private var homeWindowId: ObjectIdentifier?
     private var closingProfileIds: Set<String> = []
     private let defaults: UserDefaults = .standard
     @Published private(set) var runningProfileIds: Set<String> = []
@@ -82,24 +80,10 @@ final class ProfileWindowManager: NSObject, ObservableObject, NSWindowDelegate {
         isHomeWindowVisible = true
         persistHomeWindowVisibility()
 
-        guard let homeWindow else {
-            return
+        if let window = NSApp.windows.first(where: { $0.identifier?.rawValue == "profiles" }) {
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
         }
-
-        homeWindow.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
-    }
-
-    func registerHomeWindow(_ window: NSWindow) {
-        if homeWindowId == ObjectIdentifier(window) {
-            return
-        }
-
-        homeWindow = window
-        homeWindowId = ObjectIdentifier(window)
-        window.isReleasedWhenClosed = false
-        window.delegate = self
-        applyHomeWindowVisibility()
     }
 
     func restoreVisibleProfileWindows(accounts: [WhatsAppWebAccount], basePort: Int) {
@@ -164,15 +148,15 @@ final class ProfileWindowManager: NSObject, ObservableObject, NSWindowDelegate {
         runningProfileIds.contains(profileId)
     }
 
-    func windowShouldClose(_ sender: NSWindow) -> Bool {
-        let windowId = ObjectIdentifier(sender)
-        if let homeWindowId, windowId == homeWindowId {
-            isHomeWindowVisible = false
-            persistHomeWindowVisibility()
-            sender.orderOut(nil)
-            return false
+    nonisolated func windowShouldClose(_ sender: NSWindow) -> Bool {
+        MainActor.assumeIsolated {
+            handleWindowShouldClose(sender)
         }
+    }
 
+    @MainActor
+    private func handleWindowShouldClose(_ sender: NSWindow) -> Bool {
+        let windowId = ObjectIdentifier(sender)
         guard let profileId = profileIdsByWindowId[windowId] else {
             return true
         }
@@ -186,20 +170,18 @@ final class ProfileWindowManager: NSObject, ObservableObject, NSWindowDelegate {
         return false
     }
 
-    func windowWillClose(_ notification: Notification) {
+    nonisolated func windowWillClose(_ notification: Notification) {
         guard let window = notification.object as? NSWindow else {
             return
         }
-
         let windowId = ObjectIdentifier(window)
-        if homeWindowId == windowId {
-            homeWindow = nil
-            homeWindowId = nil
-            isHomeWindowVisible = false
-            persistHomeWindowVisibility()
-            return
+        Task { @MainActor [weak self] in
+            self?.handleWindowWillClose(windowId: windowId)
         }
+    }
 
+    @MainActor
+    private func handleWindowWillClose(windowId: ObjectIdentifier) {
         guard let profileId = profileIdsByWindowId.removeValue(forKey: windowId) else {
             return
         }
@@ -222,14 +204,7 @@ final class ProfileWindowManager: NSObject, ObservableObject, NSWindowDelegate {
         persistVisibleProfileIds()
     }
 
-    private func applyHomeWindowVisibility() {
-        if isHomeWindowVisible {
-            homeWindow?.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
-        } else {
-            homeWindow?.orderOut(nil)
-        }
-    }
+
 
     private func persistHomeWindowVisibility() {
         defaults.set(isHomeWindowVisible, forKey: StorageKey.homeWindowVisible)

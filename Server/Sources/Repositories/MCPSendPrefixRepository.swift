@@ -4,35 +4,29 @@ import Foundation
 final class MCPSendPrefixRepository {
     static let shared = MCPSendPrefixRepository()
 
-    private let defaults: UserDefaults
+    private let settingsService: FirestoreSettingsService
     private let storageKey = "mcpSendMessagePrefix"
     private let assistantNameKey = "mcpSendMessageAssistantName"
     private let signatureKey = "mcpSendMessageSignature"
 
-    init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
+    init(settingsService: FirestoreSettingsService = FirestoreSettingsService(profileID: AppProfile.default.id)) {
+        self.settingsService = settingsService
     }
 
     func load() -> (assistantName: String, signature: String) {
-        let assistantName = defaults.string(forKey: assistantNameKey)
-        let signature = defaults.string(forKey: signatureKey)
-
-        if assistantName != nil || signature != nil {
-            return (
-                assistantName: assistantName ?? "",
-                signature: signature ?? ""
-            )
-        }
-
+        let assistantName = settingsService.string(forKey: assistantNameKey)
+        let signature = settingsService.string(forKey: signatureKey)
         return (
-            assistantName: defaults.string(forKey: storageKey) ?? "",
-            signature: ""
+            assistantName: assistantName ?? "",
+            signature: signature ?? ""
         )
     }
 
     func save(assistantName: String, signature: String) {
-        defaults.set(assistantName, forKey: assistantNameKey)
-        defaults.set(signature, forKey: signatureKey)
-        defaults.set(assistantName, forKey: storageKey)
+        Task { @MainActor in
+            await settingsService.set(assistantName, forKey: assistantNameKey)
+            await settingsService.set(signature, forKey: signatureKey)
+            await settingsService.set(assistantName, forKey: storageKey)
+        }
     }
 }
