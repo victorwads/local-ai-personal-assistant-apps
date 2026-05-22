@@ -1,8 +1,5 @@
 package com.example.data
 
-import com.squareup.moshi.JsonClass
-
-@JsonClass(generateAdapter = true)
 data class VoicePromptResponse(
     val replyText: String,
     val speakText: String,

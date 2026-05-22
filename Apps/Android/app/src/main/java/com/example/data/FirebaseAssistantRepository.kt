@@ -2,18 +2,27 @@ package com.example.data
 
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.Timestamp
+import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import java.util.Date
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.UUID
 
 class FirebaseAssistantRepository(
     private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance()
 ) {
     private val started = AtomicBoolean(false)
+    private var profilesRegistration: ListenerRegistration? = null
     private var memoriesRegistration: ListenerRegistration? = null
     private var subjectsRegistration: ListenerRegistration? = null
     private var nicknamesRegistration: ListenerRegistration? = null
     private var voiceEventsRegistration: ListenerRegistration? = null
+    private var currentProfileId: String? = null
+
+    private val _profiles = MutableStateFlow<List<FirebaseProfileItem>>(emptyList())
+    val profiles: StateFlow<List<FirebaseProfileItem>> = _profiles
 
     private val _memories = MutableStateFlow<List<FirebaseMemoryItem>>(emptyList())
     val memories: StateFlow<List<FirebaseMemoryItem>> = _memories
@@ -27,9 +36,46 @@ class FirebaseAssistantRepository(
     private val _voiceEvents = MutableStateFlow<List<FirebaseVoiceEventItem>>(emptyList())
     val voiceEvents: StateFlow<List<FirebaseVoiceEventItem>> = _voiceEvents
 
-    fun start(profileId: String) {
-        if (started.getAndSet(true)) return
+    fun start(profileId: String? = null) {
+        startProfilesListener()
+        if (profileId == null) return
+        if (started.get() && currentProfileId == profileId) return
+        memoriesRegistration?.remove()
+        subjectsRegistration?.remove()
+        nicknamesRegistration?.remove()
+        voiceEventsRegistration?.remove()
+        currentProfileId = profileId
+        started.set(true)
+        attachProfileListeners(profileId)
+    }
 
+    fun stop() {
+        profilesRegistration?.remove()
+        memoriesRegistration?.remove()
+        subjectsRegistration?.remove()
+        nicknamesRegistration?.remove()
+        voiceEventsRegistration?.remove()
+        profilesRegistration = null
+        memoriesRegistration = null
+        subjectsRegistration = null
+        nicknamesRegistration = null
+        voiceEventsRegistration = null
+        currentProfileId = null
+        started.set(false)
+    }
+
+    private fun startProfilesListener() {
+        if (profilesRegistration != null) return
+        profilesRegistration = firestore.collection("Profiles")
+            .addSnapshotListener { snapshot, _ ->
+                val items = snapshot?.documents.orEmpty()
+                    .mapNotNull { doc -> doc.data?.let { FirebaseProfileItem.fromMap(doc.id, it) } }
+                    .sortedWith(compareBy<FirebaseProfileItem> { !it.isDefault }.thenBy { it.displayName.lowercase() })
+                _profiles.value = items
+            }
+    }
+
+    private fun attachProfileListeners(profileId: String) {
         memoriesRegistration = firestore.collection("Profiles/$profileId/Memories")
             .addSnapshotListener { snapshot, _ ->
                 val items = snapshot?.documents.orEmpty()
@@ -63,15 +109,81 @@ class FirebaseAssistantRepository(
             }
     }
 
-    fun stop() {
-        memoriesRegistration?.remove()
-        subjectsRegistration?.remove()
-        nicknamesRegistration?.remove()
-        voiceEventsRegistration?.remove()
-        memoriesRegistration = null
-        subjectsRegistration = null
-        nicknamesRegistration = null
-        voiceEventsRegistration = null
-        started.set(false)
+    suspend fun addMemory(profileId: String, content: String): FirebaseMemoryItem {
+        val item = FirebaseMemoryItem(
+            id = UUID.randomUUID().toString(),
+            key = content.take(64).ifBlank { "memory" },
+            content = content,
+            createdAt = Date(),
+            updatedAt = Date()
+        )
+        firestore.document("Profiles/$profileId/Memories/${item.id}")
+            .set(
+                mapOf(
+                    "id" to item.id,
+                    "key" to item.key,
+                    "content" to item.content,
+                    "createdAt" to Timestamp(item.createdAt),
+                    "updatedAt" to Timestamp(item.updatedAt)
+                )
+            )
+            .await()
+        return item
+    }
+
+    suspend fun deleteMemory(profileId: String, id: String) {
+        firestore.document("Profiles/$profileId/Memories/$id").delete().await()
+    }
+
+    suspend fun addSubject(profileId: String, title: String, notes: String, linkedContact: String? = null): FirebaseSubjectItem {
+        val now = Date()
+        val item = FirebaseSubjectItem(
+            id = UUID.randomUUID().toString(),
+            title = title,
+            summary = notes,
+            status = "active",
+            priority = 0,
+            createdAt = now,
+            updatedAt = now
+        )
+        val payload = mutableMapOf<String, Any>(
+            "id" to item.id,
+            "title" to item.title,
+            "summary" to item.summary,
+            "status" to item.status,
+            "priority" to item.priority,
+            "createdAt" to Timestamp(item.createdAt),
+            "updatedAt" to Timestamp(item.updatedAt)
+        )
+        linkedContact?.let { payload["linkedContactName"] = it }
+        firestore.document("Profiles/$profileId/Issues/${item.id}")
+            .set(payload)
+            .await()
+        return item
+    }
+
+    suspend fun updateSubjectStatus(profileId: String, id: String, status: String) {
+        firestore.document("Profiles/$profileId/Issues/$id")
+            .set(
+                mapOf(
+                    "status" to status,
+                    "updatedAt" to Timestamp(Date())
+                ),
+                com.google.firebase.firestore.SetOptions.merge()
+            )
+            .await()
+    }
+
+    suspend fun queueVoicePrompt(profileId: String, transcript: String) {
+        val docId = UUID.randomUUID().toString()
+        firestore.document("Profiles/$profileId/PromptQueue/$docId")
+            .set(
+                mapOf(
+                    "id" to docId,
+                    "createdAt" to Timestamp(Date()),
+                    "text" to transcript
+                )
+            )
+            .await()
     }
 }

@@ -18,23 +18,27 @@ import java.util.Locale
 import java.util.UUID
 
 class MainViewModel(application: Application) : AndroidViewModel(application), TextToSpeech.OnInitListener {
-
-    companion object {
-        private const val DEFAULT_FIRESTORE_PROFILE_ID = "00000000-0000-0000-0000-000000000001"
-    }
-
     private val db = AppDatabase.getDatabase(application)
-    private val repository = ProfileRepository(db.profileDao())
+    private val repository = ProfileRepository(db.selectedProfileDao())
     private val firebaseRepository = FirebaseAssistantRepository()
 
     // Live state streams
-    val profiles = repository.allProfiles.stateIn(
+    val firebaseProfiles = firebaseRepository.profiles.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = emptyList()
     )
 
-    val activeProfile = repository.activeProfile.stateIn(
+    val selectedProfileState = repository.selectedProfile.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = null
+    )
+
+    val selectedProfile = combine(firebaseProfiles, selectedProfileState) { profiles, selectedState ->
+        val selectedId = selectedState?.selectedProfileId
+        if (selectedId == null) null else profiles.firstOrNull { it.id == selectedId }
+    }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = null
@@ -106,20 +110,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application), T
         // Populate beautiful starting mock data for Demo Mode
         setupDemoData()
 
-        // Watch active profile to refresh resources
+        // Restore the last selected profile and keep Firebase listeners aligned with it.
         viewModelScope.launch {
-            activeProfile.collect { profile ->
+            repository.selectedProfile.collect { state ->
+                val selectedId = state?.selectedProfileId
+                if (!selectedId.isNullOrBlank()) {
+                    firebaseRepository.start(selectedId)
+                }
+            }
+        }
+
+        viewModelScope.launch {
+            selectedProfile.collect { profile ->
                 if (profile != null) {
                     _isDemoMode.value = false
-                    addLog("Profile changed: '${profile.name}'. Connecting to remote Mac server...")
+                    addLog("Profile changed: '${profile.displayName}'. Connecting to Firestore-backed profile...")
                     refreshAll()
                 } else {
+                    firebaseRepository.stop()
                     _isDemoMode.value = true
-                    addLog("No active connection profile. Running in local Demo Simulator mode.")
+                    addLog("No active profile selected. Running in local Demo Simulator mode.")
                     _status.value = ServerStatus(
                         connected = false,
                         serverTime = System.currentTimeMillis(),
-                        whatsappStatus = "Waiting for Firestore",
+                        whatsappStatus = "Waiting for Firebase profile",
                         activeProfileName = "None",
                         llmStatus = "Offline",
                         activeSubjectsCount = 0,
@@ -135,7 +149,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), T
         }
     }
 
-    fun startFirebaseListening(profileId: String = DEFAULT_FIRESTORE_PROFILE_ID) {
+    fun startFirebaseListening(profileId: String? = null) {
         firebaseRepository.start(profileId)
     }
 
@@ -182,13 +196,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application), T
             addLog("Switched manually to Demo Simulator Mode.")
             loadDemoData()
         } else {
-            addLog("Attempting connection to active remote profile...")
+            addLog("Attempting connection to the selected Firebase profile...")
             viewModelScope.launch {
-                val active = activeProfile.value
+                val active = selectedProfile.value
                 if (active != null) {
                     refreshAll()
                 } else {
-                    addLog("Cannot disable Demo Mode: No connection profile is set. Please create/select a profile first.")
+                    addLog("Cannot disable Demo Mode: No Firebase profile is selected yet.")
                     _isDemoMode.value = true
                 }
             }
@@ -306,64 +320,29 @@ class MainViewModel(application: Application) : AndroidViewModel(application), T
 
     // Dynamic operations dispatcher
     fun refreshAll() {
-        val currentProfile = activeProfile.value
+        val currentProfile = selectedProfile.value
         if (_isDemoMode.value || currentProfile == null) {
             loadDemoData()
             return
         }
-
-        viewModelScope.launch(Dispatchers.IO) {
-            _isConnecting.value = true
-            addLog("Connecting to ${currentProfile.baseUrl}...")
-            try {
-                val service = repository.getApiService(currentProfile)
-                val serverStatus = service.getStatus(token = if (currentProfile.apiKey.isNotEmpty()) "Bearer ${currentProfile.apiKey}" else null)
-                val apiMemories = service.getMemories(token = if (currentProfile.apiKey.isNotEmpty()) "Bearer ${currentProfile.apiKey}" else null)
-                val apiSubjects = service.getSubjects(token = if (currentProfile.apiKey.isNotEmpty()) "Bearer ${currentProfile.apiKey}" else null)
-                val apiChats = service.getChats(token = if (currentProfile.apiKey.isNotEmpty()) "Bearer ${currentProfile.apiKey}" else null)
-
-                _status.value = serverStatus
-                _memories.value = apiMemories
-                _subjects.value = apiSubjects
-                _chats.value = apiChats
-                addLog("Connected to remote server! WhatsApp status: ${serverStatus.whatsappStatus}")
-            } catch (e: Exception) {
-                addLog("Error: Failed to connect to remote Mac server. ${e.localizedMessage}")
-                addLog("Fallback to Local Demo Simulator mode to guarantee UI interactivity.")
-                _isDemoMode.value = true
-                loadDemoData()
-            } finally {
-                _isConnecting.value = false
-            }
-        }
+        val activeSubjectsCount = _subjects.value.count { it.status == "active" }
+        val memoriesCount = _memories.value.size
+        _status.value = ServerStatus(
+            connected = true,
+            serverTime = System.currentTimeMillis(),
+            whatsappStatus = "Firestore profile ready",
+            activeProfileName = currentProfile.displayName,
+            llmStatus = if (currentProfile.isAutoStart) "Auto-start enabled" else "Auto-start disabled",
+            activeSubjectsCount = activeSubjectsCount,
+            memoriesCount = memoriesCount,
+            recentLogs = _consoleLogs.value.take(5)
+        )
     }
 
-    // CRUD Server Profiles
-    fun addProfile(name: String, host: String, port: Int, apiKey: String) {
+    fun selectProfile(profileId: String) {
         viewModelScope.launch(Dispatchers.IO) {
-            val isFirst = profiles.value.isEmpty()
-            val newProfile = ConnectionProfile(
-                name = name,
-                host = host,
-                port = port,
-                apiKey = apiKey,
-                isActive = isFirst
-            )
-            repository.addProfile(newProfile)
-            addLog("Profile '$name' ($host:$port) added successfully.")
-        }
-    }
-
-    fun selectProfile(profileId: Int) {
-        viewModelScope.launch(Dispatchers.IO) {
-            repository.selectActiveProfile(profileId)
-        }
-    }
-
-    fun deleteProfile(profile: ConnectionProfile) {
-        viewModelScope.launch(Dispatchers.IO) {
-            repository.deleteProfile(profile)
-            addLog("Profile '${profile.name}' deleted.")
+            repository.selectProfile(profileId)
+            firebaseRepository.start(profileId)
         }
     }
 
@@ -376,16 +355,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application), T
             addLog("Memory saved locally: \"$content\"")
             refreshDemoStatus()
         } else {
-            val profile = activeProfile.value ?: return
+            val profile = selectedProfile.value ?: return
             viewModelScope.launch(Dispatchers.IO) {
                 try {
-                    val service = repository.getApiService(profile)
-                    val header = if (profile.apiKey.isNotEmpty()) "Bearer ${profile.apiKey}" else null
-                    service.createMemory(CreateMemoryRequest(content), header)
+                    firebaseRepository.addMemory(profile.id, content)
                     addLog("Memory uploaded successfully: \"$content\"")
                     refreshAll()
                 } catch (e: Exception) {
-                    addLog("Network error: Failed to save memory. ${e.localizedMessage}")
+                    addLog("Failed to save memory to Firestore. ${e.localizedMessage}")
                 }
             }
         }
@@ -398,16 +375,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application), T
             addLog("Memory deleted.")
             refreshDemoStatus()
         } else {
-            val profile = activeProfile.value ?: return
+            val profile = selectedProfile.value ?: return
             viewModelScope.launch(Dispatchers.IO) {
                 try {
-                    val service = repository.getApiService(profile)
-                    val header = if (profile.apiKey.isNotEmpty()) "Bearer ${profile.apiKey}" else null
-                    service.deleteMemory(id, header)
-                    addLog("Memory $id deleted on server.")
+                    firebaseRepository.deleteMemory(profile.id, id)
+                    addLog("Memory $id deleted in Firestore.")
                     refreshAll()
                 } catch (e: Exception) {
-                    addLog("Network error: Failed to delete memory. ${e.localizedMessage}")
+                    addLog("Failed to delete memory from Firestore. ${e.localizedMessage}")
                 }
             }
         }
@@ -429,16 +404,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application), T
             addLog("Subject created locally: \"$title\"")
             refreshDemoStatus()
         } else {
-            val profile = activeProfile.value ?: return
+            val profile = selectedProfile.value ?: return
             viewModelScope.launch(Dispatchers.IO) {
                 try {
-                    val service = repository.getApiService(profile)
-                    val header = if (profile.apiKey.isNotEmpty()) "Bearer ${profile.apiKey}" else null
-                    service.createSubject(CreateSubjectRequest(title, notes, linkedContact), header)
+                    firebaseRepository.addSubject(profile.id, title, notes, linkedContact)
                     addLog("Subject created: \"$title\"")
                     refreshAll()
                 } catch (e: Exception) {
-                    addLog("Network error: Failed to create subject. ${e.localizedMessage}")
+                    addLog("Failed to create subject in Firestore. ${e.localizedMessage}")
                 }
             }
         }
@@ -455,16 +428,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application), T
                 refreshDemoStatus()
             }
         } else {
-            val profile = activeProfile.value ?: return
+            val profile = selectedProfile.value ?: return
             viewModelScope.launch(Dispatchers.IO) {
                 try {
-                    val service = repository.getApiService(profile)
-                    val header = if (profile.apiKey.isNotEmpty()) "Bearer ${profile.apiKey}" else null
-                    service.updateSubject(id, UpdateSubjectRequest(status = status), header)
+                    firebaseRepository.updateSubjectStatus(profile.id, id, status)
                     addLog("Subject $id updated to status $status")
                     refreshAll()
                 } catch (e: Exception) {
-                    addLog("Network error: Failed to update subject. ${e.localizedMessage}")
+                    addLog("Failed to update subject in Firestore. ${e.localizedMessage}")
                 }
             }
         }
@@ -548,20 +519,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), T
                 addLog("Received WhatsApp reply: \"$reply\"")
             }
         } else {
-            val profile = activeProfile.value ?: return
-            viewModelScope.launch(Dispatchers.IO) {
-                try {
-                    val service = repository.getApiService(profile)
-                    val header = if (profile.apiKey.isNotEmpty()) "Bearer ${profile.apiKey}" else null
-                    service.sendMessage(chatId, SendMessageRequest(text), header)
-                    addLog("Message sent to WhatsApp API.")
-                    refreshAll()
-                    // Refill chat messages
-                    _activeChatMessages.update { it + (text to true) }
-                } catch (e: Exception) {
-                    addLog("Network error: Failed to send message. ${e.localizedMessage}")
-                }
-            }
+            addLog("Chat sending is not wired to Firestore yet.")
         }
     }
 
@@ -619,21 +577,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application), T
                 speak(spokenText)
             }
         } else {
-            val profile = activeProfile.value ?: return
+            val profile = selectedProfile.value ?: return
             viewModelScope.launch(Dispatchers.IO) {
                 try {
-                    val service = repository.getApiService(profile)
-                    val header = if (profile.apiKey.isNotEmpty()) "Bearer ${profile.apiKey}" else null
-                    val response = service.submitVoicePrompt(VoicePromptRequest(transcript), header)
-                    
-                    _assistantResponseText.value = response.replyText
-                    speak(response.speakText)
+                    firebaseRepository.queueVoicePrompt(profile.id, transcript)
+                    _assistantResponseText.value = "Queued in Firestore: \"$transcript\""
+                    speak("I queued that request for the selected profile.")
                     refreshAll()
                 } catch (e: Exception) {
-                    val errorText = "Network error: Couldn't complete voice query. ${e.localizedMessage}"
+                    val errorText = "Failed to queue voice prompt in Firestore. ${e.localizedMessage}"
                     addLog(errorText)
-                    _assistantResponseText.value = "Local response: I heard \"$transcript\" but could not contact the server."
-                    speak("Sorry, I head you say $transcript, but there was an error connecting to your Mac server.")
+                    _assistantResponseText.value = "Local response: I heard \"$transcript\" but could not queue it."
+                    speak("Sorry, I heard you say $transcript, but I couldn't queue it to Firestore.")
                 }
             }
         }

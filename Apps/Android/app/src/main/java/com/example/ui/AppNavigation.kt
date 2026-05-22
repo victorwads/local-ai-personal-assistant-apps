@@ -43,6 +43,7 @@ fun AppNavigation(
     val activeScreen = remember { mutableStateOf<Screen>(Screen.Home) }
 
     val status by viewModel.status.collectAsStateWithLifecycle()
+    val selectedProfile by viewModel.selectedProfile.collectAsStateWithLifecycle()
     Scaffold(
         topBar = {
             TopAppBar(
@@ -56,7 +57,7 @@ fun AppNavigation(
                         )
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             val activeDotColor = if (status?.connected == true) UiTokens.WaveformGreen else Color(0xFFFFB300)
-                            val statusLabel = if (status?.connected == true) "Connected Mac" else "Waiting for Firestore"
+                            val statusLabel = if (status?.connected == true) "Connected Firebase" else "Waiting for Firebase"
                             
                             Box(
                                 modifier = Modifier
@@ -70,6 +71,11 @@ fun AppNavigation(
                                 color = UiTokens.MutedSlate
                             )
                         }
+                        Text(
+                            text = "Profile: ${selectedProfile?.displayName ?: "None selected"}",
+                            fontSize = 11.sp,
+                            color = UiTokens.MutedSlate
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(

@@ -21,6 +21,7 @@ class BackgroundVoiceService : Service(), TextToSpeech.OnInitListener {
 
     private lateinit var db: AppDatabase
     private lateinit var repository: ProfileRepository
+    private val firebaseRepository = FirebaseAssistantRepository()
 
     private val CHANNEL_ID = "BackgroundVoiceAlertsChannel"
     private val NOTIFICATION_ID = 8821
@@ -39,7 +40,7 @@ class BackgroundVoiceService : Service(), TextToSpeech.OnInitListener {
         super.onCreate()
         Log.d("BackgroundVoiceService", "Creating service...")
         db = AppDatabase.getDatabase(applicationContext)
-        repository = ProfileRepository(db.profileDao())
+        repository = ProfileRepository(db.selectedProfileDao())
 
         // Create notification channel
         createNotificationChannel()
@@ -92,36 +93,40 @@ class BackgroundVoiceService : Service(), TextToSpeech.OnInitListener {
         serviceScope.launch {
             // Keep track of read message IDs to avoid repeating
             val spokenMessageIds = mutableSetOf<String>()
+            var currentProfileId: String? = null
             var iterationCount = 0
 
             while (isActive) {
                 try {
-                    val profile = repository.getActiveProfileSync()
-                    if (profile != null) {
-                        // Live API Mode
-                        Log.d("BackgroundVoiceService", "Polling remote live API push messages...")
-                        val service = repository.getApiService(profile)
-                        val header = if (profile.apiKey.isNotEmpty()) "Bearer ${profile.apiKey}" else null
-                        
-                        try {
-                            val response = service.getPendingPushMessages(header)
-                            val list = response.messages
-                            if (list.isNotEmpty()) {
-                                for (msg in list) {
-                                    if (msg.id !in spokenMessageIds) {
-                                        speakAloud(msg.textToSpeak)
-                                        spokenMessageIds.add(msg.id)
-                                        // Keep set bounded to avoid memory bloating
+                    val profileId = repository.getSelectedProfileSync()?.selectedProfileId
+                    if (!profileId.isNullOrBlank()) {
+                        if (profileId != currentProfileId) {
+                            currentProfileId = profileId
+                            firebaseRepository.start(profileId)
+                            spokenMessageIds.clear()
+                        }
+                        Log.d("BackgroundVoiceService", "Polling Firestore voice events for selected profile...")
+                        val list = firebaseRepository.voiceEvents.value
+                        if (list.isNotEmpty()) {
+                            for (event in list) {
+                                if (event.id !in spokenMessageIds) {
+                                    val text = event.text ?: event.prompt ?: event.transcript
+                                    if (!text.isNullOrBlank()) {
+                                        speakAloud(text)
+                                        spokenMessageIds.add(event.id)
                                         if (spokenMessageIds.size > 200) {
                                             spokenMessageIds.remove(spokenMessageIds.first())
                                         }
                                     }
                                 }
                             }
-                        } catch (e: Exception) {
-                            Log.e("BackgroundVoiceService", "Failed to connect to ${profile.baseUrl} during poll", e)
                         }
                     } else {
+                        if (currentProfileId != null) {
+                            currentProfileId = null
+                            firebaseRepository.stop()
+                            spokenMessageIds.clear()
+                        }
                         // Demo sandbox mode incoming simulated activity
                         iterationCount++
                         // Every ~45 seconds (3 iterations * 15 sec delay) simulate a push notification

@@ -134,7 +134,7 @@ fun ChatsScreen(viewModel: MainViewModel) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text("WhatsApp Active Feeds", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = UiTokens.TextDark)
             Spacer(modifier = Modifier.height(4.dp))
-            Text("Observing local Mac accessibility tree. Select a conversation below to manage chats from this client.", fontSize = 12.sp, color = UiTokens.MutedSlate)
+            Text("Observing Firebase-backed chat state. Select a conversation below to manage chats from this client.", fontSize = 12.sp, color = UiTokens.MutedSlate)
             Spacer(modifier = Modifier.height(16.dp))
 
             if (chats.isEmpty()) {

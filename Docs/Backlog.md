@@ -869,3 +869,35 @@ Estruturar as memórias em categorias explícitas e fazer o `list_memories` func
 Isso torna o contexto durável muito mais útil e evita que o assistente misture preferências de e-mail, calendário, personalidade e subjects no mesmo saco sem necessidade.
 
 ---
+
+## 38) Associar Firebase Auth UID a profile no server
+
+Valor: `V5 - Altíssimo`
+Risco de Desenvolvimento: `R4 - Alto`
+Risco da Feature: `R4 - Alto`
+Score de Execução: `0.56`
+
+**Descrição**  
+Criar no server uma associação explícita entre o Firebase Auth UID do usuário e o profile operacional que ele pode usar. O Android pode manter temporariamente uma tela de seleção de profile para desbloquear o fluxo agora, mas o comportamento final precisa ser server-side: quando um usuário logar com Google/Firebase, o sistema deve identificar o UID autenticado, procurar o profile correspondente no cadastro manual dos settings e carregar automaticamente o profile certo. Se não existir associação, o app deve bloquear a navegação principal, informar que não há profile registrado para aquele Firebase UID e exibir o UID com botão de copiar para o administrador poder vincular o profile correto.
+
+**Dependências**  
+- `Exposição externa para app mobile via Firebase`
+
+**Comportamento desejado**  
+- Guardar no server a relação entre Firebase UID e profile.
+- Permitir que o admin associe ou remova essa relação pelos settings.
+- Fazer o Android usar essa associação ao invés de uma escolha manual permanente.
+- Exibir um estado claro de “sem profile associado” quando o UID logado não estiver registrado.
+- Mostrar o Firebase UID autenticado com ação de copiar para facilitar o suporte/administração.
+- Manter a tela de seleção manual no Android apenas como transição temporária enquanto essa associação não existir.
+
+**Notas técnicas**  
+- A associação precisa ser por `Firebase Auth UID`, não só por e-mail, para evitar ambiguidades.
+- O model do profile deve carregar a referência da conta Firebase associada, ou uma coleção de mapeamento separada pode ser usada se isso simplificar a administração.
+- O Android não deve assumir o primeiro profile como fallback permanente quando houver mais de um cadastro.
+- Se houver mais de um profile elegível, a regra precisa ser explícita no server, nunca implícita na UI.
+
+**Por que isso entra no backlog**  
+Sem essa camada, o app depende de uma seleção manual temporária e fica frágil para múltiplos clientes e subclientes. A associação por UID é o que fecha o ciclo de autenticação, autorização e roteamento correto do profile.
+
+---

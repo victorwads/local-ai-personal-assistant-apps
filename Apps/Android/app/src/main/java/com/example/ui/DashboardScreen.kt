@@ -111,7 +111,7 @@ fun DashboardScreen(viewModel: MainViewModel) {
                             color = if (isVoiceListening) UiTokens.WaveformGreen else UiTokens.MutedSlate
                         )
                         StatusChip(
-                            label = status?.whatsappStatus ?: "Waiting for Mac",
+                            label = status?.whatsappStatus ?: "Waiting for Firebase",
                             color = UiTokens.PrimaryEmerald
                         )
                     }
@@ -178,7 +178,7 @@ fun DashboardScreen(viewModel: MainViewModel) {
                                 color = UiTokens.TextDark
                             )
                             Text(
-                                text = "When the Mac needs attention, the request appears here first.",
+                                text = "When the selected Firebase profile needs attention, the request appears here first.",
                                 fontSize = 12.sp,
                                 color = UiTokens.MutedSlate
                             )
