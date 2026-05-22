@@ -30,6 +30,7 @@ final class LMStudioSessionManager: ObservableObject {
     private var didUserPause = false
     private var plainTextRepairAttempts = 0
     private static let gmailMCPPluginID = "mcp/gmail"
+    private static let calendarMCPPluginID = "mcp/calendar"
     // Append-only timeline: never auto-trim. Keep this as a reference in case we
     // ever want to reintroduce a soft cap for memory reasons.
     // private let maxTimelineEvents = 1000
@@ -692,7 +693,8 @@ final class LMStudioSessionManager: ObservableObject {
                 headers: nil,
                 timeout: nil // (was: mcpTimeoutMs)
             ),
-            .plugin(id: gmailMCPPluginID)
+            .plugin(id: gmailMCPPluginID),
+            .plugin(id: calendarMCPPluginID)
         ]
     }
 

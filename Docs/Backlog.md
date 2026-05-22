@@ -51,7 +51,7 @@ Score de Execução: `0.44`
 Quando a conversa não estiver visível na lista principal do app, o agente deve conseguir pesquisar o nome ou número na barra de busca do WhatsApp Web/Desktop, validar o resultado e abrir o chat certo antes de seguir com a ação.
 
 **Dependências**  
-- `Configuração de seletores via YAML com auto-update`
+- `Mapeamento do parsing do WhatsApp Web via YAML com auto-update`
 
 **Por que isso entra no backlog**  
 É um fluxo mais complexo e frágil, porque depende de busca, seleção de resultado, validação de ambiguidade e sincronização do contexto do chat antes do envio.
@@ -69,7 +69,7 @@ Score de Execução: `0.40`
 Adicionar a capacidade de arquivar uma conversa específica para manter o conjunto de chats ativos mais enxuto e organizado. O comportamento padrão do WhatsApp de reabrir o chat quando chegam mensagens novas continua valendo.
 
 **Dependências**  
-- `Configuração de seletores via YAML com auto-update`
+- `Mapeamento do parsing do WhatsApp Web via YAML com auto-update`
 
 **Evidências/seletores observados na row**  
 - `data-testid="list-item-0"` identifica a linha da conversa.
@@ -138,7 +138,7 @@ Score de Execução: `0.63`
 Corrigir o bug em que a listagem de chats fica desordenada quando o WhatsApp Web retorna apenas textos como `quinta-feira` ou horários soltos em vez de uma data completa da última mensagem. O objetivo é encontrar, se existir, a origem correta da data/hora real da última mensagem em formato estruturado, mapear esse valor para algo ordenável, preferencialmente `ISO string`, e usar isso tanto na listagem visual quanto no repositório/ordenação interna.
 
 **Dependências**  
-- `Configuração de seletores via YAML com auto-update`
+- `Mapeamento do parsing do WhatsApp Web via YAML com auto-update`
 
 **Contexto observado**  
 - No exemplo atual, a row expõe `lastMessageAtText`, `lastMessageDirection`, `lastMessagePreview` e `lastMessageStatus`, mas não mostra um timestamp estruturado.
@@ -161,22 +161,22 @@ Sem uma data real e estruturada, a lista não consegue ser ordenada por recênci
 
 ---
 
-## 6) Exposição externa para app mobile e controle por API/Firebase
+## 6) Exposição externa para app mobile via Firebase
 
 Valor: `V2 - Baixo`
 Risco de Desenvolvimento: `R5 - Muito alto`
 Risco da Feature: `R5 - Muito alto`
-Score de Execução: `0.16`
+Score de Execução: `0.21`
 
 **Descrição**  
-Externalizar parte da experiência do assistente para uma aplicação mobile ou outra interface cliente, com foco em uma experiência voice-first e leve para o usuário final. O mobile deve receber e responder pendências de voz do assistente, mostrar a Home como ponto principal do dia a dia e deixar integrações mais pesadas ou administrativas para fases posteriores.
+Externalizar parte da experiência do assistente para uma aplicação mobile ou outra interface cliente, com foco em uma experiência voice-first e leve para o usuário final. O mobile deve receber e responder pendências de voz do assistente, mostrar a Home como ponto principal do dia a dia e conversar direto com o Firebase como backend operacional.
 
 **Dependências**  
 - `Nenhuma`
 
 **Capacidades desejadas**  
 - Expor sincronização via Firebase para pendências de voz, estado operacional e histórico recente.
-- Manter uma API direta ou túnel apenas para casos que realmente precisem de acesso pontual ao Mac, como dados sensíveis e chamadas específicas.
+- Fazer o app mobile ler e escrever direto no Firebase, sem camada própria de API para esse fluxo.
 - Permitir envio e recebimento de áudio, incluindo gravação e reprodução no dispositivo remoto quando fizer sentido.
 - Permitir reconhecimento de voz no lado do cliente, com uso dos recursos nativos de Android e iOS para STT/TTS.
 - Manter a máquina principal como origem do contexto, mas com uma interface externa simples para operação e resposta do usuário.
@@ -241,7 +241,7 @@ Isso não muda a lógica principal do assistente, mas melhora bastante a percep�
 Valor: `V4 - Alto`
 Risco de Desenvolvimento: `R4 - Alto`
 Risco da Feature: `R3 - Médio`
-Score de Execução: `0.44`
+Score de Execução: `0.49`
 
 **Descrição**  
 Adicionar um estado global para a aplicação entre `presente` e `ausente`, para que o assistente saiba como se comportar quando o usuário estiver na frente do computador ou não. Quando estiver `presente`, o assistente pode usar o fluxo de `speak_to_client` normalmente. Quando estiver `ausente`, ele deve evitar interromper o usuário e responder de forma mais assíncrona, registrando as pendências para revisão posterior.
@@ -356,44 +356,12 @@ Isso prepara o app para uma interface mais acessível e organizada, e permite co
 
 ---
 
-## 18) Detach da WebView em janela independente
-
-Valor: `V4 - Alto`
-Risco de Desenvolvimento: `R3 - Médio`
-Risco da Feature: `R2 - Baixo`
-Score de Execução: `0.62`
-
-**Descrição**  
-Permitir que a `WebView` da página de `WebView` seja destacada (`detach` / `pop-out`) e aberta em uma janela independente, sem recriar a instância e sem reiniciar o conteúdo carregado. Quando a janela separada fechar, a `WebView` deve voltar para a tela original exatamente na mesma instância.
-
-**Dependências**  
-- `Nenhuma`
-
-**Comportamento desejado**  
-- Adicionar um botão de `detach` na área da `WebView`.
-- Ao destacar a `WebView`, abrir uma janela independente usando a mesma instância existente.
-- Enquanto a `WebView` estiver destacada, ocultar o item correspondente do menu/tela principal.
-- Ao fechar a janela destacada, recolocar a `WebView` na tela original.
-- Quando a `WebView` voltar, o item de menu/ação correspondente deve reaparecer.
-- Manter o estado da sessão da `WebView` ativo durante todo o processo.
-
-**Notas técnicas**  
-- A solução precisa preservar uma única instância de `WKWebView`, movendo apenas o host visual entre containers.
-- A `WebView` não pode ficar em duas janelas ao mesmo tempo, então a troca de superview precisa ser controlada com cuidado.
-- Se a tela estiver em SwiftUI, a `WKWebView` precisa ficar fora do ciclo de reconstrução da view.
-- Vale prever um controller próprio para abrir/fechar a janela destacada sem reinicializar a página.
-
-**Por que isso entra no backlog**  
-Isso melhora a usabilidade quando o usuário quer manter a `WebView` separada da interface principal, sem perder contexto nem pagar o custo de recarregar tudo.
-
----
-
 ## 19) Sessões curtas para tools bloqueantes
 
 Valor: `V5 - Altíssimo`
 Risco de Desenvolvimento: `R4 - Alto`
 Risco da Feature: `R4 - Alto`
-Score de Execução: `0.50`
+Score de Execução: `0.55`
 
 **Descrição**  
 Reformular o fluxo de execução do assistente para que ferramentas bloqueantes não mantenham a sessão do LM Studio viva por tempo indefinido. A ideia é que `speak_to_client`, `ask_to_client`, `wait_for_chat_message` e `wait_for_event` passem a operar com um ciclo de sessão curta: a tool é executada, o runtime guarda o estado necessário, a sessão é finalizada e depois retomada quando houver nova resposta, nova mensagem ou novo evento.
@@ -456,7 +424,7 @@ Isso deixa a timeline muito mais legível e próxima da forma como uma pessoa en
 Valor: `V3 - Médio`
 Risco de Desenvolvimento: `R4 - Alto`
 Risco da Feature: `R2 - Baixo`
-Score de Execução: `0.54`
+Score de Execução: `0.38`
 
 **Descrição**  
 Trocar o `User-Agent` manual atualmente configurado para uma estratégia de captura automática do `User-Agent` real do navegador de referência do usuário. A ideia é expor uma rota HTTP no servidor local do app, por exemplo `/update-user-agent?token=...`, para que o navegador aberto por esse fluxo envie de volta o seu próprio `User-Agent` e o app persista esse valor para uso nas sessões de `WKWebView`.
@@ -492,7 +460,7 @@ Isso reduz a chance de incompatibilidade com o WhatsApp Web quando o navegador d
 Valor: `V5 - Altíssimo`
 Risco de Desenvolvimento: `R5 - Muito alto`
 Risco da Feature: `R5 - Muito alto`
-Score de Execução: `0.40`
+Score de Execução: `0.52`
 
 **Descrição**  
 Mudar a base de persistência do projeto para Firebase, centralizando no cloud tudo o que hoje está salvo localmente: mensagens, memórias, configurações, perfis e demais dados operacionais. A mesma base deve atender tanto a aplicação macOS quanto uma futura aplicação Android, com sincronização entre dispositivos e acesso remoto aos perfis sem depender de uma API própria para expor diretamente as informações do usuário.
@@ -514,6 +482,8 @@ Mudar a base de persistência do projeto para Firebase, centralizando no cloud t
 - O projeto precisa mapear como o estado local atual será migrado para o Firebase sem perder dados já existentes.
 - O cliente macOS e o futuro cliente Android devem passar a tratar o Firebase como backend de verdade, não como espelho parcial.
 - Esse item impacta diretamente o desenho de memória, configuração, pendências e qualquer estado persistido do assistente.
+- O app Android base já existe em `Apps/Android`, mas ainda mistura Room/local profile selection, demo fallback e Firebase parcial; isso ainda não representa uma centralização completa.
+- No macOS ainda existem preferências e estados locais, então o Firebase ainda não é a única fonte de verdade para todo o runtime.
 
 **Por que isso entra no backlog**  
 Isso transforma o assistente em uma plataforma realmente sincronizada e multi-dispositivo, reduz a dependência de APIs próprias para exposição de dados e abre caminho para acesso remoto consistente aos perfis e ao contexto do usuário.
@@ -531,7 +501,7 @@ Score de Execução: `0.62`
 Permitir que o `ask_to_client` retorne, além da pergunta principal, um array `suggested_fast_responses` com 2 a 5 respostas curtas, objetivas e prontas para toque. A ideia é que o usuário possa responder sem digitar, tanto dentro do app mobile quanto diretamente por notificação, facilitando respostas rápidas quando o contexto for simples.
 
 **Dependências**  
-- `Exposição externa para app mobile e controle por API/Firebase`
+- `Exposição externa para app mobile via Firebase`
 - `Migrar storage e sincronização para Firebase`
 
 **Comportamento desejado**  
@@ -561,10 +531,10 @@ Risco da Feature: `R3 - Médio`
 Score de Execução: `0.67`
 
 **Descrição**  
-Definir e implementar o primeiro recorte real do app Android como uma Home centrada em voz. O MVP deve priorizar `ask_to_client` e `speak_to_client`, com STT/TTS nativos, lista de solicitações de voz pendentes e histórico recente de itens resolvidos. O app não deve expor memórias, issues, nicknames, chats completos, logs ou configurações avançadas nesta fase inicial.
+Definir e implementar o primeiro recorte real do app Android como uma Home centrada em voz. O MVP deve priorizar `ask_to_client` e `speak_to_client`, com STT/TTS nativos, lista de solicitações de voz pendentes e histórico recente de itens resolvidos. O app base já existe em `Apps/Android` e já mostra partes de memórias e voz, mas ainda está cru o suficiente para que esse item continue sendo o fechamento do MVP real.
 
 **Dependências**  
-- `Exposição externa para app mobile e controle por API/Firebase`
+- `Exposição externa para app mobile via Firebase`
 - `Migrar storage e sincronização para Firebase`
 
 **Regras desejadas**  
@@ -580,81 +550,12 @@ Esse item cristaliza o verdadeiro foco do app mobile no primeiro lançamento: se
 
 ---
 
-## 25) System tray icon e saída completa do app
-
-Valor: `V4 - Alto`
-Risco de Desenvolvimento: `R3 - Médio`
-Risco da Feature: `R2 - Baixo`
-Score de Execução: `0.62`
-
-**Descrição**  
-Adicionar um ícone de `system tray`/`menu bar` para o app, permitindo controlar o ciclo de vida da aplicação fora das janelas principais. A partir desse ícone, o usuário deve conseguir fechar completamente o app quando quiser. Além disso, quando todas as janelas forem fechadas, o comportamento esperado é que o app saia da `Dock`, permaneça em background e continue acessível pelo ícone da barra de menu.
-
-**Dependências**  
-- `Nenhuma`
-
-**Comportamento desejado**  
-- Exibir um ícone na barra de menu do macOS.
-- Permitir encerrar o app completamente por esse ícone, sem depender de janelas abertas.
-- Quando todas as janelas forem fechadas, o app não deve necessariamente encerrar; ele pode continuar rodando em background.
-- O app deve sair da `Dock` quando não houver janelas visíveis.
-- O ícone da barra de menu deve continuar oferecendo acesso ao estado e às ações básicas da aplicação.
-
-**Notas técnicas**  
-- Esse item envolve ajustar o comportamento padrão de `NSApplication` para coexistir com janela fechada, background e saída explícita.
-- A implementação precisa separar “fechar janelas” de “encerrar o processo”.
-- O ícone da barra de menu deve ser uma fonte confiável para reabrir ou encerrar o app.
-- Vale prever uma decisão clara sobre quando o app deve voltar a aparecer na `Dock` ao reabrir uma janela.
-
-**Por que isso entra no backlog**  
-Isso deixa o app mais alinhado com o comportamento esperado de apps macOS residentes, dá controle real de encerramento e evita que o usuário fique preso ao ciclo das janelas.
-
----
-
-## 26) `response_id` visível e retry contínuo para `plain text`
-
-Valor: `V4 - Alto`
-Risco de Desenvolvimento: `R3 - Médio`
-Risco da Feature: `R1 - Baixíssimo`
-Score de Execução: `0.62`
-
-**Descrição**  
-Fazer a tela de controle do LM Studio mostrar o `response_id` atual na barra de status do header, dentro da box de `response_id`, e usar esse mesmo `response_id` para reabrir a sessão quando o modelo responder em `plain text` fora do fluxo esperado. A ideia é que a request continue viva de forma controlada: se vier texto puro, o runtime reaproveita o `response_id`, aplica o warning/retry já definido no prompt e chama a chat de novo até conseguir a tool call correta ou até o runtime decidir parar por segurança.
-
-**Dependências**  
-- `Sessões curtas para tools bloqueantes`
-
-**Comportamento desejado**  
-- Exibir o `response_id` atual na área de status do header.
-- Manter o valor sincronizado com a sessão ativa visível na tela.
-- Atualizar o display quando a sessão trocar ou quando uma nova resposta for gerada.
-- Tornar o `response_id` fácil de copiar/inspecionar durante debug.
-- Detectar quando a resposta veio como texto puro fora do fluxo esperado.
-- Reusar o `response_id` para continuar a mesma conversa sem perder contexto.
-- Reabrir a sessão com o warning/retry já previsto no prompt do sistema.
-- Forçar o modelo a emitir a tool call correta na nova tentativa, em vez de aceitar texto puro como resposta operacional.
-- Manter a chamada em ciclo de retentativa enquanto fizer sentido para o runtime, sem perder o contexto da conversa.
-
-**Notas técnicas**  
-- O header precisa ler o mesmo estado que o runtime usa para retomar sessões.
-- A UI não deve depender de logs para mostrar esse identificador.
-- Se não houver `response_id` disponível, a tela deve mostrar um estado vazio claro, em vez de inventar valor.
-- A correção precisa acontecer no runtime, não só no prompt, porque o erro pode ocorrer mesmo com instrução clara.
-- O fluxo de retry deve manter o contexto operacional mínimo e não reiniciar a intenção do usuário do zero.
-- O warning usado para o retry deve ser consistente com o que já foi discutido para não criar duas versões diferentes da mesma regra.
-- A política de retry precisa evitar loops infinitos se o modelo insistir em responder em texto puro.
-
-**Por que isso entra no backlog**  
-Isso facilita a inspeção da sessão corrente do LM Studio, deixa explícito qual identificador deve ser usado para retomar contexto e protege o fluxo operacional contra saídas fora do contrato sem perder continuidade.
-
----
-
 ## 27) Auto-scroll do reasoning no LM Studio
 
 Valor: `V3 - Médio`
 Risco de Desenvolvimento: `R2 - Baixo`
 Risco da Feature: `R1 - Baixíssimo`
-Score de Execução: `0.53`
+Score de Execução: `0.75`
 
 **Descrição**  
 Fazer a tela do LM Studio acompanhar automaticamente o `reasoning` e o crescimento da resposta, mantendo o scroll sempre no final enquanto o conteúdo se estende. A ideia é que, durante a geração, a área de visualização role para baixo sozinha para mostrar o trecho mais recente sem exigir intervenção manual do usuário.
@@ -689,7 +590,7 @@ Score de Execução: `0.62`
 Criar um histórico persistente das mensagens que falharam ao serem enviadas, para permitir retentativa posterior sem perder o conteúdo, o destino e o contexto operacional. Esse histórico deve se apoiar no registro já persistente de cada `send_message`, porque toda mensagem enviada precisa existir como um item rastreável antes de falhar, enviar ou ser retentada. Quando `send_message` falhar, o runtime deve registrar a tentativa com status de erro, motivo conhecido e dados suficientes para reprocessar depois com segurança.
 
 **Dependências**  
-- `Registro persistente de send_message com subjectId obrigatório`
+- `Registro persistente de `send_message` com `subjectId` obrigatório`
 
 **Comportamento desejado**  
 - Registrar mensagens que falharam no envio em um histórico próprio.
@@ -721,7 +622,7 @@ Score de Execução: `0.62`
 Adicionar a ação de `Unresolve` para subjects na UI e no app mobile, permitindo reabrir um assunto que foi resolvido cedo demais ou que ainda não terminou de verdade. Ao usar essa ação, o usuário deve preencher um motivo obrigatório de reabertura, que pode se chamar `bronca`, para deixar explícito por que o subject não deve ser encerrado agora.
 
 **Dependências**  
-- `Exposição externa para app mobile e controle por API/Firebase`
+- `Exposição externa para app mobile via Firebase`
 
 **Comportamento desejado**  
 - Permitir desfazer o estado de `resolve` de um subject.
@@ -780,7 +681,7 @@ Isso transforma o assistente em uma secretária de verdade, capaz de acompanhar 
 Valor: `V5 - Altíssimo`
 Risco de Desenvolvimento: `R4 - Alto`
 Risco da Feature: `R3 - Médio`
-Score de Execução: `0.58`
+Score de Execução: `0.56`
 
 **Descrição**  
 Tornar obrigatório o vínculo de `subjectId` para qualquer uso de `speak_to_client` e `ask_to_client`, de modo que o assistente nunca execute essas tools fora de um subject ativo. A presença do usuário cliente passa a influenciar o comportamento de resposta, mas não substitui a necessidade de um subject identificado. Quando o usuário estiver ausente, os `ask_to_client` podem ser acumulados ou adiados, mas sempre vinculados ao subject correto.
@@ -811,7 +712,7 @@ Isso evita comunicação operacional solta, melhora o rastreamento dos assuntos 
 Valor: `V5 - Altíssimo`
 Risco de Desenvolvimento: `R4 - Alto`
 Risco da Feature: `R3 - Médio`
-Score de Execução: `0.58`
+Score de Execução: `0.61`
 
 **Descrição**  
 Tornar obrigatório o `subjectId` em toda chamada de `send_message` e criar um registro persistente para cada mensagem enviada, antes mesmo dela ser concluída. Esse registro deve virar a base de auditoria e de retry do fluxo externo, permitindo acompanhar se a mensagem está `pending`, `sent` ou `error`, além de preservar o vínculo com o subject, o chat destino e o conteúdo exato enviado.
@@ -842,7 +743,7 @@ Isso cria a trilha de auditoria e rastreabilidade que o retry precisa, e também
 Valor: `V4 - Alto`
 Risco de Desenvolvimento: `R3 - Médio`
 Risco da Feature: `R2 - Baixo`
-Score de Execução: `0.58`
+Score de Execução: `0.62`
 
 **Descrição**  
 Criar uma tooling para o assistente marcar um chat como ignorado para sempre, sem depender de edição manual da deny list pelo nome. Essa ação deve ser usada apenas quando o cliente deixar explícito que nunca mais quer ouvir falar daquele chat, como grupos irrelevantes, conversas de baixa prioridade ou contatos que não devem mais entrar no acompanhamento contínuo.
@@ -872,7 +773,7 @@ Isso reduz ruído operacional e dá ao assistente uma forma segura e explícita 
 
 ---
 
-## 34) Adicionar MCP server de Calendar e gatear Gmail/Calendar por settings
+## 35) Menu Gmail/Calendar com assistente de configuração
 
 Valor: `V4 - Alto`
 Risco de Desenvolvimento: `R3 - Médio`
@@ -880,41 +781,10 @@ Risco da Feature: `R2 - Baixo`
 Score de Execução: `0.68`
 
 **Descrição**  
-Adicionar o MCP server de Calendar ao runtime do LM Studio e, ao mesmo tempo, colocar Gmail e Calendar atrás de uma configuração explícita por perfil, desligada por padrão. Hoje o caminho de integração do Gmail já aparece em `Server/Sources/Features/Server/LMStudio/LMStudioSessionManager.swift`, onde o runtime injeta `mcp/gmail` em `lmStudioIntegrations(mcpServerURL:)`, e o banner de `Server/Sources/Features/Server/LMStudio/LMStudioScreen.swift` ainda descreve somente esse fluxo. A ideia aqui é expandir esse ponto para Calendar e só listar Gmail/Calendar quando a configuração do perfil estiver ativada em `Settings`.
-
-**Dependências**  
-- `Nenhuma`
-
-**Comportamento desejado**  
-- Adicionar o plugin/integrador de Calendar ao conjunto de MCPs do LM Studio.
-- Manter Gmail e Calendar desativados por padrão.
-- Só expor essas integrações quando o perfil habilitar explicitamente essa configuração.
-- Evitar que todos os perfis compartilhem esses MCPs sem autorização explícita.
-- Tornar claro na UI que a ativação é por perfil, não global.
-
-**Notas técnicas**  
-- O ponto principal de mudança hoje é `LMStudioSessionManager.swift`, onde a lista de integrações do LM Studio é montada.
-- O texto explicativo em `LMStudioScreen.swift` também precisa mencionar Calendar além de Gmail.
-- A configuração pode viver em `SettingsScreen.swift`, com persistência via `FirestoreSettingsService(profileID:)` e uma nova flag por perfil.
-- O default precisa ser `false`, porque o sistema ainda não tem multi-conta concluído e não pode ativar isso globalmente por engano.
-
-**Por que isso entra no backlog**  
-Isso cria a base mínima para Calendar existir de verdade no runtime sem vazar acesso entre perfis e sem surpreender o usuário com integrações ativas por padrão.
-
----
-
-## 35) Menu Gmail/Calendar com assistente de configuração
-
-Valor: `V4 - Alto`
-Risco de Desenvolvimento: `R3 - Médio`
-Risco da Feature: `R2 - Baixo`
-Score de Execução: `0.64`
-
-**Descrição**  
 Criar um menu/área dedicada para Gmail e Calendar dentro da aplicação, com um assistente de configuração que explique autenticação, permissões, credenciais e como ativar cada integração. Esse menu deve servir tanto para testar as tools quanto para orientar o setup inicial, incluindo onde ficam as credenciais, como vincular as contas e como validar que o MCP está pronto. A visão é algo como um “Google” dentro do app, com Gmail e Calendar organizados e um fluxo claro de setup.
 
 **Dependências**  
-- `Adicionar MCP server de Calendar e gatear Gmail/Calendar por settings`
+- `Nenhuma`
 
 **Comportamento desejado**  
 - Exibir Gmail e Calendar em um menu próprio, separado do restante do Server.
@@ -939,13 +809,12 @@ Isso reduz fricção para configurar Gmail e Calendar e prepara o terreno para o
 Valor: `V5 - Altíssimo`
 Risco de Desenvolvimento: `R5 - Muito alto`
 Risco da Feature: `R4 - Alto`
-Score de Execução: `0.46`
+Score de Execução: `0.48`
 
 **Descrição**  
 Criar a arquitetura de múltiplas contas para Gmail e Calendar, separando provider, conta e runtime de MCP de forma explícita. Hoje a aplicação ainda se comporta como se houvesse um único fluxo de Google por contexto, então a meta aqui é permitir várias contas por profile, com isolamento de credenciais, configuração e estado. Isso precisa valer tanto para perfis locais quanto para a evolução futura com sincronização global, para que um profile possa ter contas pessoais, de trabalho e de clientes sem compartilhar token ou contexto por acidente.
 
 **Dependências**  
-- `Adicionar MCP server de Calendar e gatear Gmail/Calendar por settings`
 - `Menu Gmail/Calendar com assistente de configuração`
 - `Migrar storage e sincronização para Firebase`
 
@@ -973,7 +842,7 @@ Isso é o que transforma Gmail e Calendar de um setup único e manual em uma pla
 Valor: `V4 - Alto`
 Risco de Desenvolvimento: `R3 - Médio`
 Risco da Feature: `R2 - Baixo`
-Score de Execução: `0.60`
+Score de Execução: `0.62`
 
 **Descrição**  
 Estruturar as memórias em categorias explícitas e fazer o `list_memories` funcionar em dois modos: listar tudo sem argumento e listar apenas um subconjunto quando a categoria for informada. A ideia é que memórias de comportamento e contexto deixem de ficar todas misturadas num bloco único, para que o runtime consiga buscar só o que importa para um cenário específico, como e-mail, calendário, subjects, personalidade ou preferências do cliente.
