@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "543757406815",
+    "project_id": "local-ai-personal-assistant",
+    "storage_bucket": "local-ai-personal-assistant.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:543757406815:android:266e6b020857fc1bdfc1ea",
+        "android_client_info": {
+          "package_name": "dev.wads.localai.personalassistantcontroller"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "543757406815-dgegsf2mbblp8c69l8kddr3ilb58f5bq.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyASclpun7X4LnM10cb8dKxoZVzh-9N9KAU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "543757406815-dgegsf2mbblp8c69l8kddr3ilb58f5bq.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "543757406815-r205r3ejokprmn3verjlesmlt3pqfe77.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "dev.wads.AssistantMCPServer"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
