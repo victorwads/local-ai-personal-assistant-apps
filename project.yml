@@ -1,0 +1,35 @@
+name: AIAssistantHub
+options:
+  bundleIdPrefix: com.localaiassistant
+  deploymentTarget:
+    macOS: "14.0"
+packages:
+  Yams:
+    url: https://github.com/jpsim/Yams.git
+    from: "5.0.0"
+targets:
+  AIAssistantHub:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources
+    resources:
+      - path: Resources
+    dependencies:
+      - package: Yams
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.localaiassistant.aiassistanthub
+        GENERATE_INFOPLIST_FILE: YES
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+  AIAssistantHubTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests
+    dependencies:
+      - target: AIAssistantHub
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
