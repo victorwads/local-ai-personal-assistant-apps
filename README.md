@@ -1,4 +1,4 @@
-# Local AI Personal Assistant Apps - Server for Apple macOS
+# Ai Personal Assistant LocalHub
 ## And soon, Android and iOS Clients
 
 Local macOS personal assistant runtime for WhatsApp, memories, and life admin. It combines a native SwiftUI app, an embedded MCP HTTP server, LM Studio session supervision, and deep macOS-native capabilities (speech, dictation, Accessibility, WebView).

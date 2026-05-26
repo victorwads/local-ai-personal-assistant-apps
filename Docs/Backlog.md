@@ -436,7 +436,7 @@ Trocar o `User-Agent` manual atualmente configurado para uma estratégia de capt
 - Detectar o navegador padrão do usuário no macOS.
 - Oferecer dois modos de captura:
   - manual, quando o usuário abre a URL da rota no navegador que quiser;
-  - automático, quando o `Assistant MCP Server` iniciar e abrir esse endereço em um navegador de referência.
+  - automático, quando o `Ai Personal Assistant LocalHub` iniciar e abrir esse endereço em um navegador de referência.
 - Validar a chamada com `token` na query string.
 - Capturar o `User-Agent` do navegador que abriu a rota e salvar esse valor nas settings.
 - Atualizar automaticamente esse valor na inicialização do app ou quando houver indicação confiável de mudança de versão do navegador.

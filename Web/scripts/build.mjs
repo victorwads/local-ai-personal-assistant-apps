@@ -6,15 +6,16 @@ const projectRoot = path.resolve(webRoot, "..");
 const docsRoot = path.join(projectRoot, "Docs");
 const distRoot = path.join(webRoot, "dist");
 const logoSource = path.join(webRoot, "logo.png");
+const appName = "Ai Personal Assistant LocalHub";
 
 const githubUrl = "https://github.com/victorwads/local-ai-personal-assistant-apps";
 
 const pages = [
   {
     id: "home",
-    source: path.join(docsRoot, "History.md"),
+    source: path.join(docsRoot, "History-ptBR.md"),
     output: "index.html",
-    title: "AssistantMCPServer",
+    title: appName,
     description:
       "A história de um assistente pessoal experimental com IA, WhatsApp, memória e cuidado com a vida real.",
   },
@@ -24,7 +25,7 @@ const pages = [
     output: "privacy.html",
     title: "Política de Privacidade",
     description:
-      "Como o AssistantMCPServer trata dados, memórias, dados sensíveis e solicitações de exclusão.",
+      "Como o Ai Personal Assistant LocalHub trata dados, memórias, dados sensíveis e solicitações de exclusão.",
   },
   {
     id: "terms",
@@ -32,7 +33,7 @@ const pages = [
     output: "terms.html",
     title: "Termos de Uso",
     description:
-      "Condições para participar e testar o AssistantMCPServer como projeto experimental.",
+      "Condições para participar e testar o Ai Personal Assistant LocalHub como projeto experimental.",
   },
 ];
 
@@ -57,7 +58,7 @@ function escapeAttribute(value) {
 function mapDocumentHref(href) {
   const normalized = href.replace(/^(\.\/)?(Docs\/)?/, "");
   const mappings = new Map([
-    ["History.md", "index.html"],
+    ["History-ptBR.md", "index.html"],
     ["PrivacyPolicy.md", "privacy.html"],
     ["TermsOfUse.md", "terms.html"],
   ]);
@@ -213,7 +214,7 @@ function renderHomeIntro() {
         <p>O projeto nasceu de uma necessidade humana: transformar WhatsApp, voz, memórias e tarefas em um assistente pessoal que ajuda de verdade, com cuidado e transparência sobre dados.</p>
       </div>
       <a class="github-card" href="${githubUrl}" target="_blank" rel="noreferrer">
-        <img src="logo.png" alt="Logo do AssistantMCPServer">
+        <img src="logo.png" alt="Logo do Ai Personal Assistant LocalHub">
         <span>Ver projeto no GitHub</span>
       </a>
     </section>`;
@@ -222,6 +223,7 @@ function renderHomeIntro() {
 function pageTemplate(page, content) {
   const isHome = page.id === "home";
   const canonical = page.output === "index.html" ? "./" : page.output;
+  const documentTitle = isHome ? appName : `${page.title} | ${appName}`;
 
   return `<!doctype html>
 <html lang="pt-BR">
@@ -229,12 +231,12 @@ function pageTemplate(page, content) {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="${escapeAttribute(page.description)}">
-  <title>${escapeHtml(page.title)} | AssistantMCPServer</title>
+  <title>${escapeHtml(documentTitle)}</title>
   <style>${styles}</style>
 </head>
 <body>
   <header class="site-header">
-    <a class="brand" href="./" aria-label="AssistantMCPServer">AssistantMCPServer</a>
+    <a class="brand" href="./" aria-label="${escapeAttribute(appName)}">${escapeHtml(appName)}</a>
     <nav aria-label="Navegação principal">${renderNavigation(page.id)}</nav>
   </header>
   <main>

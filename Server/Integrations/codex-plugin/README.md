@@ -1,6 +1,6 @@
-# AssistantMCPServer (Local) — Codex Plugin
+# Ai Personal Assistant LocalHub (Local) — Codex Plugin
 
-Este plugin conecta o Codex ao **AssistantMCPServer local**, que expõe tools via MCP para operar:
+Este plugin conecta o Codex ao **Ai Personal Assistant LocalHub local**, que expõe tools via MCP para operar:
 
 - WhatsApp Desktop (ler/enviar, nicknames, acompanhar respostas)
 - Voz com o cliente (hands-free: anunciar e perguntar)
@@ -10,14 +10,14 @@ Este plugin conecta o Codex ao **AssistantMCPServer local**, que expõe tools vi
 ## Requisitos
 
 - WhatsApp Desktop **aberto** (logado).
-- Seu **Assistant MCP Server** rodando em `localhost` (HTTP) na rota `/mcp`.
+- Seu **Ai Personal Assistant LocalHub** rodando em `localhost` (HTTP) na rota `/mcp`.
   - Padrão deste plugin: `http://localhost:8080/mcp`.
 
 ## Como usar
 
-1. Inicie o Assistant MCP Server.
+1. Inicie o Ai Personal Assistant LocalHub.
 2. Abra o WhatsApp Desktop.
-3. No Codex, habilite o plugin **AssistantMCPServer (Local)** e use as ferramentas expostas pelo MCP server (ex.: `list_chats`, `list_recent_messages`, `send_message`, `speak_to_client`, `ask_to_client`).
+3. No Codex, habilite o plugin **Ai Personal Assistant LocalHub (Local)** e use as ferramentas expostas pelo MCP server (ex.: `list_chats`, `list_recent_messages`, `send_message`, `speak_to_client`, `ask_to_client`).
 
 ## Dicas
 

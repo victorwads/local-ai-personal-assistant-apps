@@ -2,13 +2,13 @@
 
 Última atualização: 26 de maio de 2026
 
-Estes Termos de Uso descrevem as condições para participar, testar e utilizar o AssistantMCPServer, um projeto experimental de assistente pessoal com IA.
+Estes Termos de Uso descrevem as condições para participar, testar e utilizar o Ai Personal Assistant LocalHub, um projeto experimental de assistente pessoal com IA.
 
 Ao usar o projeto, você declara que leu, entendeu e concorda com estes termos e com a [Política de Privacidade](./PrivacyPolicy.md).
 
 ## 1. Natureza experimental
 
-O AssistantMCPServer é um projeto experimental, em desenvolvimento, criado para testes, pesquisa, aprendizado e validação de uma experiência de assistente pessoal com IA.
+O Ai Personal Assistant LocalHub é um projeto experimental, em desenvolvimento, criado para testes, pesquisa, aprendizado e validação de uma experiência de assistente pessoal com IA.
 
 Ele não é, neste momento, um serviço comercial amplo, um produto finalizado, uma solução profissional garantida ou uma plataforma aberta ao público em geral. O acesso pode ser limitado, controlado por convite, inscrição, disponibilidade técnica ou decisão do mantenedor.
 
@@ -117,5 +117,4 @@ O mantenedor também pode encerrar ou suspender a participação de usuários qu
 Para dúvidas sobre estes termos, privacidade ou exclusão de dados, entre em contato:
 
 - E-mail: contato@wads.dev
-- Projeto: AssistantMCPServer / Wads.dev
-
+- Projeto: Ai Personal Assistant LocalHub / Wads.dev

@@ -2,13 +2,13 @@
 
 Última atualização: 26 de maio de 2026
 
-Esta política descreve como o AssistantMCPServer trata dados pessoais e operacionais dos usuários. O projeto é um assistente pessoal experimental com IA, criado para testes, pesquisa, uso pessoal e validação de uma experiência de assistente capaz de ajudar com conversas, memórias, assuntos da vida, dados sensíveis e tarefas do dia a dia.
+Esta política descreve como o Ai Personal Assistant LocalHub trata dados pessoais e operacionais dos usuários. O projeto é um assistente pessoal experimental com IA, criado para testes, pesquisa, uso pessoal e validação de uma experiência de assistente capaz de ajudar com conversas, memórias, assuntos da vida, dados sensíveis e tarefas do dia a dia.
 
 O projeto não tem fins lucrativos, não vende dados pessoais e não utiliza os dados dos usuários para publicidade.
 
 ## 1. Natureza do projeto
 
-O AssistantMCPServer ainda é um projeto em fase experimental. Ele não é, neste momento, um produto aberto ao público em geral nem um serviço comercial amplo. O acesso pode ser limitado, controlado por inscrição, convite, capacidade técnica ou disponibilidade do mantenedor.
+O Ai Personal Assistant LocalHub ainda é um projeto em fase experimental. Ele não é, neste momento, um produto aberto ao público em geral nem um serviço comercial amplo. O acesso pode ser limitado, controlado por inscrição, convite, capacidade técnica ou disponibilidade do mantenedor.
 
 A proposta do projeto é permitir que entusiastas e usuários convidados testem um assistente pessoal com IA em um ambiente realista, com integrações como WhatsApp, voz, memórias, dados sensíveis, assuntos de acompanhamento e ferramentas de automação.
 
@@ -157,5 +157,4 @@ Esta política pode ser atualizada conforme o projeto evoluir. A data de última
 Para dúvidas, solicitações de privacidade, pedidos de exclusão ou outros assuntos relacionados a dados pessoais, entre em contato:
 
 - E-mail: contato@wads.dev
-- Projeto: AssistantMCPServer / Wads.dev
-
+- Projeto: Ai Personal Assistant LocalHub / Wads.dev
