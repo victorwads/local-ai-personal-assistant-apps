@@ -110,6 +110,7 @@ struct WhatsAppNativeYAMLTreeTesterScreen: View {
                 structureRoot: model.structureRoot,
                 executionRoot: model.executionRoot,
                 parseError: model.parseError,
+                runtimeError: nil,
                 expansionState: model.expansionState
             )
         }

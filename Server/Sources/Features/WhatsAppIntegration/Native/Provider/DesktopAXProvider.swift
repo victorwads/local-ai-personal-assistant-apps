@@ -21,17 +21,37 @@ final class DesktopAXProvider: WhatsAppIntegrationProvider {
 private struct DesktopAXParser: WhatsAppConversationParser {
     let accessibility: AccessibilityService
     let parser: WhatsAppAppParser
+    private let chatListParser = WhatsAppNativeChatListParser()
+    private let yamlExtractionRunner = WhatsAppNativeYAMLExtractionRunner()
 
     func listConversations() async throws -> [ConversationSummary] {
         let snapshot = try accessibility.captureWhatsAppSnapshot(maxDepth: 14)
-        let screenState = parser.parse(snapshot: snapshot, messageLimit: 10)
-        return screenState.conversations
+        let extractionTree = try yamlExtractionRunner.run(
+            yamlTree: try loadNativeSelectorTree(),
+            snapshotRoot: snapshot.rootNode
+        ).tree
+        let context = WhatsAppIntegrationContext(
+            mode: .desktopAX,
+            flow: "app_open",
+            extractionTree: extractionTree
+        )
+        return try chatListParser.parse(context: context)
     }
 
     func readMessages(limit: Int) async throws -> (selectedChatName: String?, flow: String?, messages: [Message], composeFocused: Bool, canSendText: Bool) {
         let snapshot = try accessibility.captureWhatsAppSnapshot(maxDepth: 14)
         let screenState = parser.parse(snapshot: snapshot, messageLimit: limit)
         return (screenState.selectedChatName, "desktopAX", screenState.messages, screenState.composeFocused, screenState.canSendText)
+    }
+
+    private func loadNativeSelectorTree() throws -> YAMLTree {
+        guard let url = Bundle.main.url(forResource: "whatsapp_native_selectors", withExtension: "yaml"),
+              let data = try? Data(contentsOf: url),
+              let yaml = String(data: data, encoding: .utf8) else {
+            throw AccessibilityError.nodeNotFound
+        }
+
+        return try YAMLTree.parse(yaml: yaml)
     }
 }
 

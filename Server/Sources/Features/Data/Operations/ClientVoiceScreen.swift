@@ -76,6 +76,13 @@ struct ClientVoiceScreen: View {
 
             Spacer()
 
+            Button {
+                appModel.openPendingClientPromptWindow()
+            } label: {
+                Label("Open Prompt Test", systemImage: "mic.fill")
+            }
+            .buttonStyle(.bordered)
+
             Button("Clear") {
                 showingClearHistoryConfirmation = true
             }
@@ -97,6 +104,10 @@ struct ClientVoiceScreen: View {
             Text("No client voice history yet.")
                 .font(.headline)
             Text("Speak or ask something from the voice client and the conversation will appear here as chat bubbles.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Text("Use Open Prompt Test to exercise the pending prompt flow without waiting for the assistant.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

@@ -109,8 +109,8 @@ struct LMStudioScreen: View {
                         } label: {
                             Label("Refresh Models", systemImage: "arrow.clockwise")
                         }
-                        .buttonStyle(.bordered)
-                        .tint(.white.opacity(0.18))
+                        .buttonStyle(.borderedProminent)
+                        .tint(.blue)
 
                         Menu {
                             if lmStudio.models.isEmpty {
@@ -145,9 +145,9 @@ struct LMStudioScreen: View {
                         } label: {
                             Label("Pause Session", systemImage: "pause.fill")
                         }
-                        .buttonStyle(.bordered)
-                        .tint(.white.opacity(0.18))
-                        .disabled(!lmStudio.isSessionActive)
+                        .buttonStyle(.borderedProminent)
+                        .tint(.orange)
+                        .disabled(!lmStudio.canPauseSession)
                     }
 
                     Text("Start always clears the previous context. Pause only stops the current stream.")

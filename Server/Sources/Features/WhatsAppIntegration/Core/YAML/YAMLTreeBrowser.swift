@@ -6,6 +6,7 @@ struct YAMLTreeBrowserView: View {
     let structureRoot: YAMLStructureNode?
     let executionRoot: YAMLExecutionNode?
     let parseError: String?
+    let runtimeError: String?
     let expansionState: YAMLTreeExpansionState
 
     var body: some View {
@@ -67,6 +68,12 @@ struct YAMLTreeBrowserView: View {
             VStack(alignment: .leading, spacing: 10) {
                 if let parseError, !parseError.isEmpty {
                     Text(parseError)
+                        .font(.callout)
+                        .foregroundStyle(.red)
+                }
+
+                if let runtimeError, !runtimeError.isEmpty {
+                    Text(runtimeError)
                         .font(.callout)
                         .foregroundStyle(.red)
                 }
@@ -355,4 +362,3 @@ private struct YAMLExecutionTreeNodeView: View {
         }
     }
 }
-

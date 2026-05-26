@@ -171,6 +171,7 @@ final class AppModel: ObservableObject {
     var chatHistoryListenerId: UUID?
     var chatHistoryPersistTask: Task<Void, Never>?
     var whatsAppWebDetachedWindowControllersByAccountId: [UUID: WhatsAppWebDetachedWindowController] = [:]
+    var isShuttingDown = false
 
     init(
         profile: AppProfile = .default,

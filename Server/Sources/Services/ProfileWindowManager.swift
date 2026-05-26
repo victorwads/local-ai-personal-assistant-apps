@@ -2,6 +2,27 @@ import AppKit
 import SwiftUI
 
 @MainActor
+private final class ProfileRuntime {
+    let profile: AppProfile
+    var appModel: AppModel
+    var controller: NSWindowController?
+
+    init(profile: AppProfile, appModel: AppModel, controller: NSWindowController? = nil) {
+        self.profile = profile
+        self.appModel = appModel
+        self.controller = controller
+    }
+
+    var window: NSWindow? {
+        controller?.window
+    }
+
+    func shutdown() async {
+        await appModel.shutdown()
+    }
+}
+
+@MainActor
 final class ProfileWindowManager: NSObject, ObservableObject, NSWindowDelegate {
     static let shared = ProfileWindowManager()
 
@@ -9,11 +30,8 @@ final class ProfileWindowManager: NSObject, ObservableObject, NSWindowDelegate {
         static let homeWindowVisible = "assistant.window.home.visible.v1"
     }
 
-    private var controllersByProfileId: [String: NSWindowController] = [:]
-    private var appModelsByProfileId: [String: AppModel] = [:]
-    private var profilesByProfileId: [String: AppProfile] = [:]
+    private var runtimesByProfileId: [String: ProfileRuntime] = [:]
     private var profileIdsByWindowId: [ObjectIdentifier: String] = [:]
-    private var closingProfileIds: Set<String> = []
     private weak var homeWindow: NSWindow?
     private var isTerminating = false
     private let defaults: UserDefaults = .standard
@@ -26,10 +44,11 @@ final class ProfileWindowManager: NSObject, ObservableObject, NSWindowDelegate {
         super.init()
     }
 
-    func showMainWindow(profile: AppProfile, appModel: @autoclosure () -> AppModel) {
-        profilesByProfileId[profile.id] = profile
+    func showMainWindow(profile: AppProfile, appModel: AppModel) {
+        let runtime = runtimesByProfileId[profile.id] ?? ProfileRuntime(profile: profile, appModel: appModel)
+        runtimesByProfileId[profile.id] = runtime
 
-        if let existing = controllersByProfileId[profile.id], let window = existing.window {
+        if let window = runtime.window {
             runningProfileIds.insert(profile.id)
             setProfileWindowVisible(profile.id, true)
             window.makeKeyAndOrderFront(nil)
@@ -37,11 +56,8 @@ final class ProfileWindowManager: NSObject, ObservableObject, NSWindowDelegate {
             return
         }
 
-        let resolvedAppModel = appModelsByProfileId[profile.id] ?? appModel()
-        appModelsByProfileId[profile.id] = resolvedAppModel
-
         let rootView = ContentView()
-            .environmentObject(resolvedAppModel)
+            .environmentObject(runtime.appModel)
             .frame(minWidth: 980, minHeight: 680)
 
         let hosting = NSHostingView(rootView: rootView)
@@ -61,7 +77,7 @@ final class ProfileWindowManager: NSObject, ObservableObject, NSWindowDelegate {
         setProfileWindowVisible(profile.id, true)
 
         let controller = NSWindowController(window: window)
-        controllersByProfileId[profile.id] = controller
+        runtime.controller = controller
 
         NSApp.activate(ignoringOtherApps: true)
         window.center()
@@ -69,21 +85,20 @@ final class ProfileWindowManager: NSObject, ObservableObject, NSWindowDelegate {
     }
 
     func startBackgroundProfile(profile: AppProfile, appModel: AppModel) {
-        profilesByProfileId[profile.id] = profile
-        appModelsByProfileId[profile.id] = appModel
+        let runtime = runtimesByProfileId[profile.id] ?? ProfileRuntime(profile: profile, appModel: appModel)
+        runtime.appModel = appModel
+        runtimesByProfileId[profile.id] = runtime
         runningProfileIds.insert(profile.id)
         setProfileWindowVisible(profile.id, false)
     }
 
     func revealMainWindow(profileId: String) {
-        guard let controller = controllersByProfileId[profileId], let window = controller.window else {
-            guard let profile = profilesByProfileId[profileId] else {
-                return
-            }
-            guard let appModel = appModelsByProfileId[profileId] else {
-                return
-            }
-            showMainWindow(profile: profile, appModel: appModel)
+        guard let runtime = runtimesByProfileId[profileId] else {
+            return
+        }
+
+        guard let window = runtime.window else {
+            showMainWindow(profile: runtime.profile, appModel: runtime.appModel)
             return
         }
 
@@ -123,26 +138,20 @@ final class ProfileWindowManager: NSObject, ObservableObject, NSWindowDelegate {
     }
 
     func stopMainWindow(profileId: String) async {
-        closingProfileIds.insert(profileId)
-        defer { closingProfileIds.remove(profileId) }
-
-        guard let controller = controllersByProfileId.removeValue(forKey: profileId) else {
+        guard let runtime = runtimesByProfileId.removeValue(forKey: profileId) else {
             runningProfileIds.remove(profileId)
             setProfileWindowVisible(profileId, false)
-            let appModel = appModelsByProfileId.removeValue(forKey: profileId)
-            await appModel?.shutdown()
             return
         }
 
         runningProfileIds.remove(profileId)
         setProfileWindowVisible(profileId, false)
-        let appModel = appModelsByProfileId.removeValue(forKey: profileId)
-        if let window = controller.window {
+        if let window = runtime.window {
             profileIdsByWindowId.removeValue(forKey: ObjectIdentifier(window))
         }
 
-        await appModel?.shutdown()
-        controller.close()
+        await runtime.shutdown()
+        runtime.controller?.close()
     }
 
     func registerHomeWindow(_ window: NSWindow) {
@@ -184,10 +193,6 @@ final class ProfileWindowManager: NSObject, ObservableObject, NSWindowDelegate {
             return true
         }
 
-        if closingProfileIds.contains(profileId) {
-            return true
-        }
-
         setProfileWindowVisible(profileId, false)
         sender.orderOut(nil)
         return false
@@ -217,10 +222,11 @@ final class ProfileWindowManager: NSObject, ObservableObject, NSWindowDelegate {
 
         runningProfileIds.remove(profileId)
         visibleProfileIds.remove(profileId)
-        controllersByProfileId.removeValue(forKey: profileId)
+        guard let runtime = runtimesByProfileId.removeValue(forKey: profileId) else {
+            return
+        }
 
-        let appModel = appModelsByProfileId.removeValue(forKey: profileId)
-        Task { await appModel?.shutdown() }
+        Task { await runtime.shutdown() }
     }
 
     private func setProfileWindowVisible(_ profileId: String, _ isVisible: Bool) {

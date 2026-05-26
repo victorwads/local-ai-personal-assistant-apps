@@ -4,6 +4,7 @@ import WebKit
 enum WhatsAppWebYAMLExtractionRunnerError: LocalizedError {
     case invalidSpecRoot
     case invalidResultPayload
+    case missingTreePayload
 
     var errorDescription: String? {
         switch self {
@@ -11,7 +12,38 @@ enum WhatsAppWebYAMLExtractionRunnerError: LocalizedError {
             return "Invalid YAML spec. Expected a root object."
         case .invalidResultPayload:
             return "Invalid extraction result payload."
+        case .missingTreePayload:
+            return "Invalid extraction result. Missing `tree` payload."
         }
+    }
+}
+
+enum WhatsAppWebYAMLExtractionProjection {
+    static func projectedSpec(from yamlTree: YAMLTree) -> AnySendable {
+        projectedSpec(fromRoot: yamlTree.root)
+    }
+
+    static func projectedSpec(fromRoot root: [String: AnySendable]) -> AnySendable {
+        var projected: [String: AnySendable] = [:]
+
+        if let flows = root["flows"] {
+            projected["flows"] = flows
+        }
+        if let web = root["web"] {
+            projected["web"] = web
+        }
+
+        return .object(projected)
+    }
+
+    static func extractedTree(from resultRoot: AnySendable) throws -> AnySendable {
+        guard case .object(let resultDict) = resultRoot else {
+            throw WhatsAppWebYAMLExtractionRunnerError.invalidResultPayload
+        }
+        guard let tree = resultDict["tree"] else {
+            throw WhatsAppWebYAMLExtractionRunnerError.missingTreePayload
+        }
+        return tree
     }
 }
 
@@ -23,7 +55,7 @@ final class WhatsAppWebYAMLExtractionRunner {
     }
 
     func run(yamlTree: YAMLTree, webView: WKWebView) async throws -> RunResult {
-        let specAny: AnySendable = .object(yamlTree.root)
+        let specAny = WhatsAppWebYAMLExtractionProjection.projectedSpec(from: yamlTree)
         let specJSON = try AnySendableJSON.encodeToJSONString(specAny)
         let script = WhatsAppWebJavaScript.makeExtractionScript(specJSONLiteral: specJSON)
         let json = try await evaluateJavaScriptString(script, in: webView)
@@ -34,7 +66,8 @@ final class WhatsAppWebYAMLExtractionRunner {
             throw WhatsAppWebYAMLExtractionRunnerError.invalidResultPayload
         }
 
-        return RunResult(json: json, tree: any)
+        let extractedTree = try WhatsAppWebYAMLExtractionProjection.extractedTree(from: any)
+        return RunResult(json: json, tree: extractedTree)
     }
 
     private func evaluateJavaScriptString(_ javaScript: String, in webView: WKWebView) async throws -> String {

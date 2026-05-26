@@ -24,6 +24,13 @@ enum WhatsAppWebBridgeError: LocalizedError {
 @MainActor
 final class WhatsAppWebBridge {
     private let yamlExtractionRunner = WhatsAppWebYAMLExtractionRunner()
+    private let chatListParser = WhatsAppWebChatListParser()
+
+    func captureExtractionTree(from webView: WKWebView) async throws -> AnySendable {
+        let tree = try loadWebSelectorTree()
+        let result = try await yamlExtractionRunner.run(yamlTree: tree, webView: webView)
+        return result.tree
+    }
 
     func captureSnapshot(from webView: WKWebView) async throws -> WhatsAppWebPageSnapshot {
         let script = WhatsAppWebJavaScript.dumpDocumentScript
@@ -70,19 +77,8 @@ final class WhatsAppWebBridge {
         throw WhatsAppWebBridgeError.unsupportedOperation("captureSelectedChat has been removed from the legacy WebView bridge.")
     }
 
-    struct ChatListItem: Codable, Equatable {
-        let title: String
-        let preview: String?
-        let timeText: String?
-        let unreadCount: Int?
-        let path: String?
-        let clickablePath: String?
-    }
-
-    func listChatTitles(from webView: WKWebView, limit: Int) async throws -> [ChatListItem] {
-        let tree = try loadWebSelectorTree()
-        let result = try await yamlExtractionRunner.run(yamlTree: tree, webView: webView)
-        let items = chatListItems(from: result.tree)
+    func listChatTitles(from webView: WKWebView, limit: Int) async throws -> [WhatsAppWebChatListItem] {
+        let items = chatListParser.parseItems(from: try await captureExtractionTree(from: webView))
         return Array(items.prefix(max(1, min(limit, 200))))
     }
 
@@ -102,54 +98,6 @@ final class WhatsAppWebBridge {
 
     private func loadWebActionShortcuts() throws -> WhatsAppWebActionShortcuts {
         return WhatsAppWebActionShortcuts.from(yamlTree: try loadWebSelectorTree())
-    }
-
-    private func chatListItems(from tree: AnySendable) -> [ChatListItem] {
-        guard let web = objectValue(of: tree)?["web"],
-              let chatListRoot = objectValue(of: web)?["chat_list_root"],
-              let chatListExtract = objectValue(of: chatListRoot)?["extract"],
-              let chatItemNode = objectValue(of: chatListExtract)?["chat_item"],
-              let items = objectValue(of: chatItemNode)?["items"].flatMap(arrayValue(of:)),
-              !items.isEmpty else {
-            return []
-        }
-
-        return items.compactMap { item in
-            guard let itemDict = objectValue(of: item),
-                  let extract = objectValue(of: itemDict["extract"] ?? .null) else {
-                return nil
-            }
-
-            let title = stringValue(at: ["chat_item_name", "value"], in: extract)
-            let normalizedTitle = title?.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard let normalizedTitle, !normalizedTitle.isEmpty else {
-                return nil
-            }
-
-            let preview = stringValue(at: ["chat_item_last_message", "value"], in: extract)
-                ?? stringValue(at: ["chat_item_last_message"], in: extract)
-
-            let timeText = stringValue(at: ["chat_item_last_message_time", "value"], in: extract)
-                ?? stringValue(at: ["chat_item_last_message_time"], in: extract)
-
-            let unreadCount = intValue(
-                at: ["chat_item_unread_badge", "extract", "count", "value"],
-                in: extract
-            )
-            ?? intValue(at: ["chat_item_unread_badge", "extract", "count"], in: extract)
-
-            let path = stringValue(at: ["path"], in: itemDict)
-            let clickablePath = stringValue(at: ["extract", "chat_clickable_to_open_chat", "path"], in: itemDict)
-
-            return ChatListItem(
-                title: normalizedTitle,
-                preview: preview,
-                timeText: timeText,
-                unreadCount: unreadCount,
-                path: path,
-                clickablePath: clickablePath
-            )
-        }
     }
 
     func executeShortcut(from webView: WKWebView, modifiers: [String], key: String) async throws {
@@ -175,46 +123,6 @@ final class WhatsAppWebBridge {
             throw WhatsAppWebBridgeError.unexpectedResponse
         }
         try await executeShortcut(from: webView, modifiers: shortcut.modifiers, key: shortcut.key)
-    }
-
-    private func objectValue(of any: AnySendable?) -> [String: AnySendable]? {
-        guard let any, case .object(let dict) = any else { return nil }
-        return dict
-    }
-
-    private func arrayValue(of any: AnySendable?) -> [AnySendable]? {
-        guard let any, case .array(let values) = any else { return nil }
-        return values
-    }
-
-    private func stringValue(at path: [String], in root: [String: AnySendable]) -> String? {
-        guard let value = value(at: path, in: root) else { return nil }
-        if case .string(let string) = value { return string }
-        return nil
-    }
-
-    private func intValue(at path: [String], in root: [String: AnySendable]) -> Int? {
-        guard let value = value(at: path, in: root) else { return nil }
-        switch value {
-        case .int(let int):
-            return int
-        case .double(let double):
-            return Int(double)
-        default:
-            return nil
-        }
-    }
-
-    private func value(at path: [String], in root: [String: AnySendable]) -> AnySendable? {
-        var current: AnySendable? = .object(root)
-        for key in path {
-            guard let object = objectValue(of: current),
-                  let next = object[key] else {
-                return nil
-            }
-            current = next
-        }
-        return current
     }
 
     func captureDebugDOM(from webView: WKWebView) async throws -> WhatsAppWebDebugDOMSnapshot {

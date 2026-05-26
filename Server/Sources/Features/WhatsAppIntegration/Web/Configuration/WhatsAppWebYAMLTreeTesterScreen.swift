@@ -111,6 +111,7 @@ struct WhatsAppWebYAMLTreeTesterScreen: View {
                 structureRoot: model.structureRoot,
                 executionRoot: model.executionRoot,
                 parseError: model.parseError,
+                runtimeError: model.lastError,
                 expansionState: model.expansionState
             )
         }
@@ -165,8 +166,10 @@ final class WhatsAppWebYAMLTreeTesterViewModel: ObservableObject {
     func reparseYAML() {
         do {
             let tree = try YAMLTree.parse(yaml: yamlText)
-            structureRoot = YAMLStructureNode.from(any: .object(tree.root), title: "root", path: "root")
+            let projectedSpec = WhatsAppWebYAMLExtractionProjection.projectedSpec(from: tree)
+            structureRoot = YAMLStructureNode.from(any: projectedSpec, title: "root", path: "root")
             parseError = nil
+            lastError = nil
         } catch {
             structureRoot = nil
             parseError = error.localizedDescription
@@ -205,4 +208,3 @@ final class WhatsAppWebYAMLTreeTesterViewModel: ObservableObject {
         lastError = message
     }
 }
-

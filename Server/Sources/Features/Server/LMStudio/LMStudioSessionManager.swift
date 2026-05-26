@@ -112,6 +112,10 @@ final class LMStudioSessionManager: ObservableObject {
         }
     }
 
+    var canPauseSession: Bool {
+        activeSessionID != nil || sessionTask != nil
+    }
+
     var statusTitle: String {
         if isRefreshingModels && !isSessionActive {
             return "Refreshing"
@@ -276,7 +280,7 @@ final class LMStudioSessionManager: ObservableObject {
     }
 
     func startFreshSession(mcpServerURL: URL) async {
-        if isSessionActive {
+        if canPauseSession {
             await restartFreshSession(mcpServerURL: mcpServerURL)
             return
         }
@@ -289,7 +293,7 @@ final class LMStudioSessionManager: ObservableObject {
     }
 
     func pauseSession() async {
-        guard isSessionActive else {
+        guard canPauseSession else {
             return
         }
 
@@ -543,9 +547,7 @@ final class LMStudioSessionManager: ObservableObject {
             let lastMCPServerURL,
             let responseID = result.responseID
         {
-            restartTask?.cancel()
-            restartTask = Task { [weak self] in
-                try? await Task.sleep(for: .milliseconds(350))
+            scheduleTaskRestart(delay: .milliseconds(350)) { [weak self] in
                 await self?.continueSession(
                     mcpServerURL: lastMCPServerURL,
                     previousResponseID: responseID,
@@ -558,9 +560,7 @@ final class LMStudioSessionManager: ObservableObject {
         // If auto-run is enabled, the agent prompt is expected to run "forever". If the
         // streaming session ends cleanly, start a fresh session again.
         guard autoRunEnabled, !didUserPause, let lastMCPServerURL else { return }
-        restartTask?.cancel()
-        restartTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(600))
+        scheduleTaskRestart(delay: .milliseconds(600)) { [weak self] in
             await self?.startFreshSession(mcpServerURL: lastMCPServerURL)
         }
     }
@@ -581,6 +581,15 @@ final class LMStudioSessionManager: ObservableObject {
         sessionState = .failed(message: message)
         lastErrorMessage = message
         appendLog("LM Studio session failed: \(message)", level: .error)
+
+        guard autoRunEnabled, !didUserPause, let lastMCPServerURL, shouldAutoRecover(from: error) else {
+            return
+        }
+
+        appendLog("LM Studio session hit a recoverable error. Restarting automatically.", level: .warning)
+        scheduleTaskRestart(delay: .milliseconds(1000)) { [weak self] in
+            await self?.startFreshSession(mcpServerURL: lastMCPServerURL)
+        }
     }
 
     private func appendLiveText(_ text: inout String, fragment: String) {
@@ -598,8 +607,70 @@ final class LMStudioSessionManager: ObservableObject {
     func handleMCPServerReady(mcpServerURL: URL) async {
         lastMCPServerURL = mcpServerURL
         guard autoRunEnabled else { return }
-        guard !isSessionActive else { return }
+        guard !canPauseSession else { return }
         await startFreshSession(mcpServerURL: mcpServerURL)
+    }
+
+    private func scheduleTaskRestart(
+        delay: Duration,
+        operation: @escaping @Sendable () async -> Void
+    ) {
+        restartTask?.cancel()
+        restartTask = Task { [weak self] in
+            try? await Task.sleep(for: delay)
+            guard !Task.isCancelled else { return }
+            await operation()
+            await self?.clearRestartTaskIfCurrent()
+        }
+    }
+
+    private func clearRestartTaskIfCurrent() async {
+        guard let restartTask, restartTask.isCancelled == false else { return }
+        self.restartTask = nil
+    }
+
+    private func shouldAutoRecover(from error: Error) -> Bool {
+        if let lmStudioError = error as? LMStudioClientError {
+            switch lmStudioError {
+            case .missingFinalResponse:
+                return true
+            case .httpError(let statusCode, _):
+                return statusCode == 408 || statusCode == 425 || statusCode == 429 || (500...599).contains(statusCode)
+            case .invalidBaseURL, .invalidResponse, .invalidPayload:
+                return false
+            }
+        }
+
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .timedOut,
+                 .networkConnectionLost,
+                 .cannotConnectToHost,
+                 .cannotFindHost,
+                 .dnsLookupFailed,
+                 .notConnectedToInternet:
+                return true
+            default:
+                return false
+            }
+        }
+
+        let nsError = error as NSError
+        if nsError.domain == NSURLErrorDomain {
+            switch nsError.code {
+            case NSURLErrorTimedOut,
+                 NSURLErrorNetworkConnectionLost,
+                 NSURLErrorCannotConnectToHost,
+                 NSURLErrorCannotFindHost,
+                 NSURLErrorDNSLookupFailed,
+                 NSURLErrorNotConnectedToInternet:
+                return true
+            default:
+                break
+            }
+        }
+
+        return false
     }
 
     func openLMStudioApp(activate: Bool = false) {

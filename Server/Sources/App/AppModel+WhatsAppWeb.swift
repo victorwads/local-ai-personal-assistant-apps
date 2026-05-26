@@ -139,6 +139,16 @@ extension AppModel {
         whatsAppWebDetachedWindowControllersByAccountId.removeValue(forKey: accountId)
     }
 
+    func closeAllDetachedWhatsAppWebWindows() {
+        let controllers = Array(whatsAppWebDetachedWindowControllersByAccountId.values)
+        for controller in controllers {
+            controller.close()
+        }
+
+        detachedWhatsAppWebAccountIds.removeAll()
+        whatsAppWebDetachedWindowControllersByAccountId.removeAll()
+    }
+
     func captureWhatsAppWebSnapshot(for account: WhatsAppWebAccount) async {
         let webView = whatsAppWebSessionStore.webView(for: account)
 

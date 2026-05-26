@@ -42,8 +42,23 @@ extension AppModel {
                 bridge: whatsAppWebBridge,
                 messageSettleDelayMilliseconds: whatsAppWebSettings.messageSettleDelayMilliseconds
             )
-            await whatsAppPollingOrchestrator.refresh(provider: provider, messageLimit: 50)
-            lastRefreshDescription = "Web refreshed at \(Date().formatted(date: .omitted, time: .standard))"
+            do {
+                // Phase 1: keep Web polling list-only while we finish the chat list parser.
+                let conversations = try await provider.parser.listConversations()
+                let blockedConversations = conversations.filter { isBlocked($0.name) }
+                for blockedConversation in blockedConversations {
+                    memoryStore.removeConversation(id: blockedConversation.id)
+                }
+                let allowedConversations = conversations.filter { !isBlocked($0.name) }
+                memoryStore.replaceConversations(allowedConversations)
+                appendLog(
+                    "Polling(web) chat list only: incoming=\(conversations.count) allowed=\(allowedConversations.count) blocked=\(blockedConversations.count).",
+                    level: .info
+                )
+                lastRefreshDescription = "Web list refreshed at \(Date().formatted(date: .omitted, time: .standard))"
+            } catch {
+                appendLog("WhatsApp Web list refresh failed: \(error.localizedDescription)", level: .warning)
+            }
             return
 
         case .desktopAX:

@@ -12,6 +12,9 @@ struct ClientVoiceHandsFreeWindow: View {
     @State private var statusText: String?
     @State private var recognitionTask: Task<Void, Never>?
     @State private var debounceTask: Task<Void, Never>?
+    @State private var restartTask: Task<Void, Never>?
+    @State private var latestTranscript = ""
+    @State private var receivedFinalTranscript = false
     @State private var sawSpeechStart = false
     @State private var didStartListening = false
     @State private var didResolve = false
@@ -100,6 +103,7 @@ struct ClientVoiceHandsFreeWindow: View {
     private func startHandsFreeListening() {
         recognitionTask?.cancel()
         debounceTask?.cancel()
+        restartTask?.cancel()
         statusText = nil
         isListening = true
         didResolve = false
@@ -110,12 +114,16 @@ struct ClientVoiceHandsFreeWindow: View {
                     recognitionLocaleIdentifier: voiceSettings.recognitionLocaleIdentifier,
                     onPartial: { partial in
                         guard !didResolve else { return }
+                        latestTranscript = partial
+                        receivedFinalTranscript = false
                         draftResponse = partial
                         Task { await appModel.clientVoiceEventsRepository.updateAskDraft(id: askId, draft: partial) }
-                        scheduleAutoSubmit(with: partial)
+                        scheduleAutoSubmit()
                     },
                     onFinal: { final in
                         Task { @MainActor in
+                            latestTranscript = final
+                            receivedFinalTranscript = true
                             await finalizeRecognizedText(final, closeWindow: true)
                         }
                     },
@@ -133,22 +141,32 @@ struct ClientVoiceHandsFreeWindow: View {
         }
     }
 
-    private func scheduleAutoSubmit(with transcript: String) {
+    private func scheduleAutoSubmit() {
         debounceTask?.cancel()
         let debounceSeconds = max(0.5, appModel.handsFreeClientVoiceSettings.debounceSeconds)
 
         debounceTask = Task { @MainActor in
             try? await Task.sleep(for: .seconds(debounceSeconds))
             guard !Task.isCancelled else { return }
-            await finalizeRecognizedText(transcript, closeWindow: true)
+            if !receivedFinalTranscript {
+                try? await Task.sleep(for: .seconds(0.8))
+                guard !Task.isCancelled else { return }
+            }
+            await finalizeRecognizedText(latestTranscript, closeWindow: true)
         }
     }
 
     private func handleRecognitionError(_ error: VoiceAssistantError) {
         debounceTask?.cancel()
         recognitionTask = nil
-        isListening = false
-        statusText = error.localizedDescription
+
+        guard isNoSpeechDetected(error) else {
+            isListening = false
+            statusText = error.localizedDescription
+            return
+        }
+
+        scheduleRecognitionRestart()
     }
 
     private func stopRecognition() {
@@ -156,9 +174,32 @@ struct ClientVoiceHandsFreeWindow: View {
         recognitionTask = nil
         debounceTask?.cancel()
         debounceTask = nil
+        restartTask?.cancel()
+        restartTask = nil
         Task { @MainActor in
             appModel.voiceAssistant.stopListening()
         }
+    }
+
+    private func scheduleRecognitionRestart() {
+        restartTask?.cancel()
+        statusText = nil
+        isListening = true
+
+        restartTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(0.75))
+            guard !Task.isCancelled, !didResolve else { return }
+            startHandsFreeListening()
+        }
+    }
+
+    private func isNoSpeechDetected(_ error: VoiceAssistantError) -> Bool {
+        guard case .recognitionFailed(let description) = error else { return false }
+        let normalized = description.lowercased()
+        return normalized.contains("no speech detected")
+            || normalized.contains("speech was detected")
+            || normalized.contains("didn't detect any speech")
+            || normalized.contains("did not detect any speech")
     }
 
     private func finalizeRecognizedText(_ text: String, closeWindow: Bool) async {
