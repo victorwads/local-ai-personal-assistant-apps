@@ -15,7 +15,7 @@ struct ProfileWindowHostView: View {
 
     var body: some View {
         if let profile = profilesController.profiles.first(where: { $0.id == profileId }) {
-            ProfileWindowScreen(
+            CommandCenterScreen(
                 profile: profile,
                 runtimeState: profilesController.displayState(for: profile).runtimeState,
                 windowState: profilesController.displayState(for: profile).windowState

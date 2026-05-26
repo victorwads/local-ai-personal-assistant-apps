@@ -112,10 +112,10 @@ Once the assistant is running, the prompt guides it through a loop similar to th
 
 1. check current date and runtime context
 2. review memories and standing preferences when relevant
-3. inspect active subjects and pending work
+3. inspect active issues and pending work
 4. wait for new events or unread messages
 5. read recent messages for the specific chat or event
-6. update subjects, memories, nicknames, or sensitive-data references when needed
+6. update issues, memories, or sensitive-data references when needed
 7. decide whether to reply, ask the client, speak to the client, or wait
 8. persist the outcome so the next cycle starts from a coherent state
 
@@ -145,7 +145,7 @@ In practice:
 - WhatsApp polling and state sync are usually the main background cost
 - different people receive messages at different times, so inference load tends not to spike constantly
 
-This enables hosting assistants for family members (for example: partner, mother) on a single machine, while exposing a UI (and future mobile UI) so those users can manage memories, subjects, and state without local access to LM Studio.
+This enables hosting assistants for family members (for example: partner, mother) on a single machine, while exposing a UI (and future mobile UI) so those users can manage memories, issues, and state without local access to LM Studio.
 
 ## Target application composition
 
@@ -458,7 +458,20 @@ ProfileRuntime.openWindow()
 │       └── if window does not exist
 │           ├── creates ProfileWindowController(profileId)
 │           ├── creates ProfileWindowHostView(profileId)
-│           │   └── ProfileWindowScreen(profileId)
+│           │   └── CommandCenterScreen(profile, runtimeState, windowState)
+│           │       ├── CommandCenterSidebar
+│           │       │   └── CommandCenterMenuRegistry.sections()
+│           │       └── CommandCenterContentView(selectedRoute)
+│           │           └── CommandCenterScreenRegistry.screen(for: selectedRoute)
+│           │               ├── MyProfileScreen
+│           │               ├── IssuesPlaceholderScreen
+│           │               ├── MemoriesPlaceholderScreen
+│           │               ├── SensitiveDataPlaceholderScreen
+│           │               ├── ClientVoicePlaceholderScreen
+│           │               ├── ChatsPlaceholderScreen
+│           │               ├── WhatsApp*PlaceholderScreen
+│           │               ├── MCPServers*PlaceholderScreen
+│           │               └── SettingsPlaceholderScreen
 │           ├── stores it in profileWindows[profileId]
 │           ├── shows window
 │           └── WindowVisibilityTracker.windowDidShow(profileId)
@@ -556,6 +569,87 @@ TrayIconController
                         └── NSApp.terminate()
 ```
 
+### Command Center workspace
+
+`CommandCenter` is the main visual workspace for one running profile. It is not the profile registry/list screen, and it does not own profile lifecycle, repositories, MCP startup, WhatsApp runtime startup, or AppKit window creation.
+
+The profile window composition is:
+
+```text
+AppWindowManager.showProfileWindow(profile)
+└── ProfileWindowController
+    └── ProfileWindowHostView(profileId, profilesController)
+        ├── looks up Profile by profileId
+        ├── reads runtime/window display state from ProfilesController
+        └── CommandCenterScreen(profile, runtimeState, windowState)
+            ├── owns selected CommandCenterRoute
+            ├── renders CommandCenterSidebar
+            │   └── sections/items from CommandCenterMenuRegistry
+            ├── optionally renders CommandCenterHeaderView
+            └── renders CommandCenterContentView
+                └── CommandCenterScreenRegistry maps the route to the owning feature screen
+```
+
+Command Center owns:
+
+- workspace layout
+- sidebar sections and menu item rendering
+- selected route state
+- route-to-screen composition
+
+Command Center does not own:
+
+- feature content implementation
+- profile persistence
+- profile runtime lifecycle
+- MCP server creation or service startup
+- WhatsApp runtime creation
+- AI provider execution
+- settings persistence
+- AppKit window management
+
+The initial menu registry is static and intentionally small:
+
+```text
+My Data
+├── My Profile -> Profiles/MyProfileScreen
+├── Issues -> Issues/IssuesPlaceholderScreen
+├── Memories -> Memories/MemoriesPlaceholderScreen
+├── Sensitive Data -> SensitiveData/SensitiveDataPlaceholderScreen
+└── Client Voice -> ClientVoice/ClientVoicePlaceholderScreen
+
+WhatsApp Integration
+├── Chats -> Chats/ChatsPlaceholderScreen
+├── WebView -> WhatsAppCrawling/Integrations/WebView/Screens/WhatsAppWebViewPlaceholderScreen
+├── Web YAML Debug -> WhatsAppCrawling/Integrations/WebView/Screens/WhatsAppWebYAMLDebugPlaceholderScreen
+├── Native YAML Debug -> WhatsAppCrawling/Integrations/Native/Screens/WhatsAppNativeYAMLDebugPlaceholderScreen
+└── Logs -> WhatsAppCrawling/WhatsAppLogsPlaceholderScreen
+
+Server
+├── Tools -> MCPServers/MCPToolsPlaceholderScreen
+├── AI Connection -> AIConnection/AIConnectionPlaceholderScreen
+└── Server Logs -> MCPServers/ServerLogsPlaceholderScreen
+
+Settings
+└── Settings -> Settings/SettingsPlaceholderScreen
+```
+
+The registry already has placeholder fields for developer-mode visibility and future visibility rules. The WhatsApp WebView route should eventually be visible only when the active integration is WhatsApp Web or when developer/debug mode allows it. YAML debug routes should probably become developer-mode only once the app has a developer-mode setting.
+
+The current first route is `myProfile`. It renders `MyProfileScreen` from the Profiles feature and preserves the profile/runtime/window diagnostics that used to live in `ProfileWindowScreen`:
+
+- profile name
+- profile ID
+- MCP port
+- runtime state
+- window state
+
+`ProfileWindowScreen` may remain as a temporary compatibility wrapper around `MyProfileScreen`, but it is no longer the primary profile window content.
+
+Future runtime dependency injection should flow from `ProfileRuntimeContainer` into the profile window/Command Center context. That container is expected to hold profile context, profile-scoped repositories, MCP server runtime, WhatsApp runtime, assistant loop, settings observer, logs/debug services, and AI connection/runtime services. Command Center should receive only the context needed to render the selected workspace screen; it should not construct those dependencies itself.
+
+Settings remains a separate feature. Later, each feature can declare profile-scoped settings sections, and the Settings feature should own persistence plus rendering/composition into one unified settings UI. Features should not create independent settings repositories.
+
 ### Architectural decision summary
 
 The defended architecture is:
@@ -567,7 +661,9 @@ TrayIconController observes or is connected to ProfilesController.
 ProfilesController knows profile runtimes.
 ProfileRuntime knows its own window through ProfileWindowManaging.
 AppWindowManager creates physical windows.
-ProfileWindowScreen is only visual content.
+ProfileWindowHostView hosts CommandCenterScreen for a running profile.
+CommandCenter owns workspace routing and layout, not runtime lifecycle.
+Feature-owned screens render CommandCenter route content.
 AppRootView only switches Login/ProfileHome according to auth.
 ```
 
@@ -635,8 +731,7 @@ The runtime keeps a local model of the assistant world:
 - voice events
 - memories
 - sensitive data
-- subjects
-- nicknames
+- issues
 - server logs and debug artifacts
 
 That local state is what MCP serves, rather than re-parsing everything from scratch on every request.
