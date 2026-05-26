@@ -6,9 +6,15 @@ APP_NAME="AIAssistantHub"
 PROJECT_FILE="$ROOT_DIR/AIAssistantHub.xcodeproj"
 DERIVED_DATA="$ROOT_DIR/DerivedData"
 APP_PATH="$DERIVED_DATA/Build/Products/Debug/${APP_NAME}.app"
+APP_ICON_DIR="$ROOT_DIR/Resources/Assets.xcassets/AppIcon.appiconset"
 
 "$ROOT_DIR/Scripts/sanitize_file_endings.sh"
-"$ROOT_DIR/Scripts/regenerate_app_icon.sh"
+
+icon_pngs=("$APP_ICON_DIR"/*.png(N))
+if (( ${#icon_pngs} == 0 )); then
+  "$ROOT_DIR/Scripts/regenerate_app_icon.sh"
+fi
+
 cd "$ROOT_DIR"
 xcodegen generate
 osascript -e "tell application \"$APP_NAME\" to quit" >/dev/null 2>&1 || true

@@ -1,12 +1,14 @@
 import Foundation
 
-struct ClientVoiceMessage: Codable, Equatable, Sendable {
-    let id: String
-    let issueId: String
-    let kind: ClientVoiceMessageKind
-    let text: String?
-    let audioReference: String?
-    let createdAt: Date
+struct ClientVoiceMessage: PersistableModel, Equatable, Sendable {
+    @DocumentID var id: String?
+    var issueId: String
+    var kind: ClientVoiceMessageKind
+    var text: String?
+    var audioReference: String?
+    var createdAt: Date
+    var updatedAt: Date
+    var deletedAt: Date?
 }
 
 enum ClientVoiceMessageKind: String, Codable, Equatable, Sendable {

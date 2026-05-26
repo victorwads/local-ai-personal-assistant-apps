@@ -1,10 +1,13 @@
 import Foundation
 
-struct Chat: Codable, Equatable, Sendable {
-    let id: String
-    let source: String?
-    let title: String
-    let lastMessageText: String?
-    let lastMessageAt: Date?
-    let handled: Bool
+struct Chat: PersistableModel, Equatable, Sendable {
+    @DocumentID var id: String?
+    var source: String?
+    var title: String
+    var lastMessageText: String?
+    var lastMessageAt: Date?
+    var handled: Bool
+    var createdAt: Date
+    var updatedAt: Date
+    var deletedAt: Date?
 }

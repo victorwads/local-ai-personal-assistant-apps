@@ -1,11 +1,14 @@
 import Foundation
 
-struct ChatMessage: Codable, Equatable, Sendable {
-    let id: String
-    let chatId: String
-    let sourceMessageId: String?
-    let text: String?
-    let authorName: String?
-    let sentAt: Date?
-    let handled: Bool
+struct ChatMessage: PersistableModel, Equatable, Sendable {
+    @DocumentID var id: String?
+    var chatId: String
+    var sourceMessageId: String?
+    var text: String?
+    var authorName: String?
+    var sentAt: Date?
+    var handled: Bool
+    var createdAt: Date
+    var updatedAt: Date
+    var deletedAt: Date?
 }

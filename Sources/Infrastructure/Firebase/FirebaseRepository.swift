@@ -4,11 +4,10 @@ import FirebaseFirestore
 open class FirebaseRepository<Model: PersistableModel> {
     public let entityName: String
     public let path: FirebaseRepositoryPath
+    public let collection: CollectionReference
 
     private let firestore: Firestore
-    private let mapper: FirestoreCodableMapper
     private let dateProvider: () -> Date
-    private let identifierProvider: () -> String
 
     private var cache: [String: Model] = [:]
 
@@ -16,33 +15,30 @@ open class FirebaseRepository<Model: PersistableModel> {
         entityName: String,
         path: FirebaseRepositoryPath,
         firestore: Firestore = .firestore(),
-        mapper: FirestoreCodableMapper = FirestoreCodableMapper(),
-        dateProvider: @escaping () -> Date = Date.init,
-        identifierProvider: @escaping () -> String = { UUID().uuidString }
+        dateProvider: @escaping () -> Date = Date.init
     ) {
         self.entityName = entityName
         self.path = path
         self.firestore = firestore
-        self.mapper = mapper
+        self.collection = firestore.collection(path.collectionPath)
         self.dateProvider = dateProvider
-        self.identifierProvider = identifierProvider
     }
 
     open func getAll(includeDeleted: Bool = false) async throws -> [Model] {
-        let snapshot = try await collectionReference().getDocuments()
-        let models = try snapshot.documents.map { try decode($0.data(), documentId: $0.documentID) }
+        let snapshot = try await collection.getDocuments()
+        let models = try snapshot.documents.map { try decode(document: $0) }
         mergeCache(models)
         return includeDeleted ? models : models.filter { $0.deletedAt == nil }
     }
 
     open func getById(_ id: String) async throws -> Model? {
         let snapshot = try await documentReference(for: id).getDocument()
-        guard snapshot.exists, let data = snapshot.data() else {
+        guard snapshot.exists else {
             return nil
         }
 
-        let model = try decode(data, documentId: snapshot.documentID)
-        cache[model.id] = model
+        let model = try decode(document: snapshot)
+        cache[model.id ?? snapshot.documentID] = model
         return model
     }
 
@@ -53,18 +49,18 @@ open class FirebaseRepository<Model: PersistableModel> {
     @discardableResult
     open func save(_ model: Model, merge: Bool = true) async throws -> Model {
         var record = model
-        let isCreating = record.id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let isCreating = record.id?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true
 
         if isCreating {
-            record.id = identifierProvider()
+            record.id = collection.document().documentID
             record.createdAt = dateProvider()
         }
 
         record.updatedAt = dateProvider()
 
-        let data = try encode(record)
-        try await documentReference(for: record.id).setData(data, merge: merge)
-        cache[record.id] = record
+        let document = try documentReference(for: record.id)
+        try await document.setData(from: record, merge: merge)
+        cache[document.documentID] = record
         return record
     }
 
@@ -75,18 +71,20 @@ open class FirebaseRepository<Model: PersistableModel> {
 
         let batch = firestore.batch()
         var persistedModels: [Model] = []
-        let collection = try collectionReference()
 
         for model in models {
             var record = model
-            if record.id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                record.id = identifierProvider()
+            if record.id?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true {
+                record.id = collection.document().documentID
                 record.createdAt = dateProvider()
             }
 
             record.updatedAt = dateProvider()
-            let data = try encode(record)
-            batch.setData(data, forDocument: collection.document(record.id), merge: true)
+            guard let documentID = record.id, !documentID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw FirestoreRepositoryError.missingDocumentId
+            }
+            let document = collection.document(documentID)
+            try batch.setData(from: record, forDocument: document, merge: true)
             persistedModels.append(record)
         }
 
@@ -120,24 +118,20 @@ open class FirebaseRepository<Model: PersistableModel> {
     }
 
     open func observe(_ listener: @escaping ([Model]) -> Void) -> FirestoreListenerToken {
-        guard let collection = try? collectionReference() else {
-            return FirestoreListenerToken {}
-        }
-
         let registration = collection.addSnapshotListener { [weak self] snapshot, _ in
             guard let self else { return }
 
             guard let snapshot else {
-                listener(self.cache.values.filter { $0.deletedAt == nil }.sorted { $0.id < $1.id })
+                listener(self.visibleCachedModels())
                 return
             }
 
             do {
-                let models = try snapshot.documents.map { try self.decode($0.data(), documentId: $0.documentID) }
+                let models = try snapshot.documents.map { try self.decode(document: $0) }
                 self.mergeCache(models)
                 listener(models.filter { $0.deletedAt == nil })
             } catch {
-                listener(self.cache.values.filter { $0.deletedAt == nil }.sorted { $0.id < $1.id })
+                listener(self.visibleCachedModels())
             }
         }
 
@@ -150,34 +144,27 @@ open class FirebaseRepository<Model: PersistableModel> {
         cache.removeAll()
     }
 
-    private func collectionReference() throws -> CollectionReference {
+    private func documentReference(for id: String?) throws -> DocumentReference {
         guard path.isValid else {
             throw FirestoreRepositoryError.invalidPath
         }
-        return firestore.collection(path.collectionPath)
-    }
-
-    private func documentReference(for id: String) throws -> DocumentReference {
-        guard path.isValid else {
-            throw FirestoreRepositoryError.invalidPath
-        }
-        guard !id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        guard let id, !id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw FirestoreRepositoryError.missingDocumentId
         }
         return firestore.collection(path.collectionPath).document(id)
     }
 
-    private func encode(_ model: Model) throws -> [String: Any] {
+    private func decode(document: QueryDocumentSnapshot) throws -> Model {
         do {
-            return try mapper.encode(model, entityName: entityName)
+            return try document.data(as: Model.self)
         } catch {
-            throw FirestoreRepositoryError.encodingFailed(entity: entityName)
+            throw FirestoreRepositoryError.decodingFailed(entity: entityName)
         }
     }
 
-    private func decode(_ data: [String: Any], documentId: String?) throws -> Model {
+    private func decode(document: DocumentSnapshot) throws -> Model {
         do {
-            return try mapper.decode(Model.self, from: data, documentId: documentId, entityName: entityName)
+            return try document.data(as: Model.self)
         } catch {
             throw FirestoreRepositoryError.decodingFailed(entity: entityName)
         }
@@ -185,8 +172,19 @@ open class FirebaseRepository<Model: PersistableModel> {
 
     private func mergeCache(_ models: [Model]) {
         for model in models {
-            cache[model.id] = model
+            guard let id = model.id, !id.isEmpty else {
+                continue
+            }
+            cache[id] = model
         }
+    }
+
+    private func visibleCachedModels() -> [Model] {
+        cache.values
+            .filter { $0.deletedAt == nil }
+            .sorted {
+                ($0.id ?? "") < ($1.id ?? "")
+            }
     }
 
 }

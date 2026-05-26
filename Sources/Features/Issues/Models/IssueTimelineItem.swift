@@ -1,9 +1,11 @@
 import Foundation
 
-struct IssueTimelineItem: Codable, Equatable, Sendable {
-    let id: String
-    let issueId: String
-    let kind: String?
-    let summary: String?
-    let createdAt: Date
+struct IssueTimelineItem: PersistableModel, Equatable, Sendable {
+    @DocumentID var id: String?
+    var issueId: String
+    var kind: String?
+    var summary: String?
+    var createdAt: Date
+    var updatedAt: Date
+    var deletedAt: Date?
 }
