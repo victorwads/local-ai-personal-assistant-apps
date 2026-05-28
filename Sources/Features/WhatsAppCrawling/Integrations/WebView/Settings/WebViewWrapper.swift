@@ -3,6 +3,7 @@ import Foundation
 @MainActor
 final class WhatsAppWebViewSettingsWrapper {
     private static let scopeName = "whatsappWebView"
+    private static let iso8601Formatter = ISO8601DateFormatter()
 
     private let settings: SettingsStore
 
@@ -11,13 +12,26 @@ final class WhatsAppWebViewSettingsWrapper {
     }
 
     private enum Key {
+        static let autoStart = "autoStart"
         static let url = "url"
         static let userAgent = "userAgent"
+        static let userAgentAutoRefreshEnabled = "userAgentAutoRefreshEnabled"
+        static let userAgentRefreshIntervalDays = "userAgentRefreshIntervalDays"
+        static let lastUserAgentRefreshAt = "lastUserAgentRefreshAt"
         static let zoom = "zoom"
         static let viewportWidth = "viewportWidth"
         static let viewportHeight = "viewportHeight"
         static let enableWebInspector = "enableWebInspector"
         static let websiteDataStoreIdentifier = "websiteDataStoreIdentifier"
+    }
+
+    var autoStart: Bool {
+        get {
+            (settings.value(scope: Self.scopeName, key: Key.autoStart) ?? "") == "true"
+        }
+        set {
+            settings.setValue(scope: Self.scopeName, key: Key.autoStart, value: newValue ? "true" : "false")
+        }
     }
 
     var url: String {
@@ -39,6 +53,47 @@ final class WhatsAppWebViewSettingsWrapper {
         set {
             let value = (newValue ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             settings.setValue(scope: Self.scopeName, key: Key.userAgent, value: value)
+        }
+    }
+
+    var userAgentAutoRefreshEnabled: Bool {
+        get {
+            (settings.value(scope: Self.scopeName, key: Key.userAgentAutoRefreshEnabled) ?? "false") == "true"
+        }
+        set {
+            settings.setValue(scope: Self.scopeName, key: Key.userAgentAutoRefreshEnabled, value: newValue ? "true" : "false")
+        }
+    }
+
+    var userAgentRefreshIntervalDays: Int {
+        get {
+            let value = Int(settings.value(scope: Self.scopeName, key: Key.userAgentRefreshIntervalDays) ?? "") ?? 7
+            return max(1, value)
+        }
+        set {
+            settings.setValue(scope: Self.scopeName, key: Key.userAgentRefreshIntervalDays, value: String(max(1, newValue)))
+        }
+    }
+
+    var lastUserAgentRefreshAt: String? {
+        get {
+            let value = (settings.value(scope: Self.scopeName, key: Key.lastUserAgentRefreshAt) ?? "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            return value.isEmpty ? nil : value
+        }
+        set {
+            let value = (newValue ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            settings.setValue(scope: Self.scopeName, key: Key.lastUserAgentRefreshAt, value: value)
+        }
+    }
+
+    var lastUserAgentRefreshDate: Date? {
+        get {
+            guard let raw = lastUserAgentRefreshAt else { return nil }
+            return Self.iso8601Formatter.date(from: raw)
+        }
+        set {
+            lastUserAgentRefreshAt = newValue.map { Self.iso8601Formatter.string(from: $0) }
         }
     }
 

@@ -5,6 +5,8 @@ struct CommandCenterScreen: View {
     let runtimeState: ProfileRuntimeState
     let windowState: ProfileWindowState
     let settingsSectionRegistry: SettingsSectionRegistry?
+    let statusRegistry: ProfileRuntimeStatusRegistry?
+    let whatsAppWebViewService: WebViewWhatsAppCrawlingService?
 
     @State private var selectedRoute: CommandCenterRoute? = .myProfile
 
@@ -22,7 +24,8 @@ struct CommandCenterScreen: View {
                 CommandCenterHeaderView(
                     profile: profile,
                     runtimeState: runtimeState,
-                    windowState: windowState
+                    windowState: windowState,
+                    statusRegistry: statusRegistry
                 )
 
                 Divider()
@@ -33,6 +36,7 @@ struct CommandCenterScreen: View {
                     runtimeState: runtimeState,
                     windowState: windowState,
                     settingsSectionRegistry: settingsSectionRegistry,
+                    whatsAppWebViewService: whatsAppWebViewService,
                     screenRegistry: screenRegistry
                 )
             }

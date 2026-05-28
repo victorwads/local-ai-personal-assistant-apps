@@ -13,32 +13,58 @@ final class ProfileRuntime: ObservableObject {
         self.context = context
     }
 
-    func start() async throws {
+    @discardableResult
+    func ensureContainer() async throws -> ProfileRuntimeContainer {
+        if let container {
+            try await container.startSettings()
+            return container
+        }
+
+        let container = try ProfileRuntimeContainer(context: context)
+        try await container.startSettings()
+        self.container = container
+        return container
+    }
+
+    func startServices() async throws {
         guard state == .stopped || state == .failed else { return }
         state = .starting
 
         do {
-            let container = try ProfileRuntimeContainer(context: context)
-            try await container.start()
-            self.container = container
+            let container = try await ensureContainer()
+            try await container.startServices()
             state = .running
         } catch {
-            await container?.stop()
-            container = nil
+            await container?.stopServices()
             state = .failed
             throw error
         }
     }
 
-    func stop() async {
+    func stopServices() async {
         guard state == .running || state == .starting else { return }
         state = .stopping
 
+        await container?.stopServices()
+        state = .stopped
+    }
+
+    func openWindow(using windowManager: ProfileWindowManaging?) async throws {
+        try await ensureContainer()
+        windowManager?.showProfileWindow(profile: context.profile)
+        windowState = .visible
+    }
+
+    func hideWindow(using windowManager: ProfileWindowManaging?) {
+        guard let profileId = context.profile.id else { return }
+        windowManager?.hideProfileWindow(profileId: profileId)
+        windowState = .hidden
+    }
+
+    func stop() async {
+        await stopServices()
         await container?.stop()
         container = nil
-
-        state = .stopped
-        windowState = .hidden
     }
 
     func setWindowState(_ newState: ProfileWindowState) {

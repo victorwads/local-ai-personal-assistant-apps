@@ -6,6 +6,7 @@ struct CommandCenterContentView: View {
     let runtimeState: ProfileRuntimeState
     let windowState: ProfileWindowState
     let settingsSectionRegistry: SettingsSectionRegistry?
+    let whatsAppWebViewService: WebViewWhatsAppCrawlingService?
     let screenRegistry: CommandCenterScreenRegistry
 
     var body: some View {
@@ -14,7 +15,8 @@ struct CommandCenterContentView: View {
             profile: profile,
             runtimeState: runtimeState,
             windowState: windowState,
-            settingsSectionRegistry: settingsSectionRegistry
+            settingsSectionRegistry: settingsSectionRegistry,
+            whatsAppWebViewService: whatsAppWebViewService
         )
     }
 }

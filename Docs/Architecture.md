@@ -272,7 +272,7 @@ AIAssistantHubApp
 │       │
 │       ├── state:
 │       │   ├── allProfiles[]
-│       │   ├── runningProfiles[profileId: ProfileRuntime]
+│       │   ├── profileRuntimes[profileId: ProfileRuntime]
 │       │   ├── profileDisplayStates[]
 │       │   ├── loading
 │       │   └── error
@@ -286,10 +286,10 @@ AIAssistantHubApp
 │       │
 │       ├── semantic shortcuts:
 │       │   ├── startProfile(profileId)
-│       │   │   └── finds/creates ProfileRuntime and calls runtime.start()
+│       │   │   └── finds/creates ProfileRuntime and calls runtime.startServices()
 │       │   │
 │       │   ├── stopProfile(profileId)
-│       │   │   └── finds ProfileRuntime and calls runtime.stop()
+│       │   │   └── finds ProfileRuntime and calls runtime.stopServices()
 │       │   │
 │       │   ├── openProfileWindow(profileId)
 │       │   │   └── finds ProfileRuntime and calls runtime.openWindow()
@@ -413,7 +413,7 @@ The intended start flow is:
 ```text
 ProfilesController.startProfile(profileId)
 ├── finds Profile in allProfiles[]
-├── if runtime already exists in runningProfiles[profileId]
+├── if runtime already exists in profileRuntimes[profileId]
 │   └── returns existing runtime
 │
 └── if runtime does not exist
@@ -438,18 +438,21 @@ ProfilesController.startProfile(profileId)
     │               ├── settings observer
     │               └── logs/debug
     │
-    ├── runningProfiles[profileId] = runtime
-    └── runtime.start()
+    ├── profileRuntimes[profileId] = runtime
+    └── runtime.startServices()
+        ├── ensures ProfileRuntimeContainer exists
+        ├── starts SettingsStore so service autoStart settings can be read
+        └── starts only subservices whose autoStart setting is enabled
 ```
 
 The controller-level methods are intentionally allowed and useful:
 
 ```text
 ProfilesController.startProfile(profileId)
-└── runtime.start()
+└── runtime.startServices()
 
 ProfilesController.stopProfile(profileId)
-└── runtime.stop()
+└── runtime.stopServices()
 
 ProfilesController.openProfileWindow(profileId)
 └── runtime.openWindow()
@@ -462,7 +465,7 @@ These are semantic shortcuts for UI and tray surfaces. They should perform looku
 
 ### Settings Architecture
 
-Settings are profile-scoped runtime state. Each running `ProfileRuntime` owns exactly one live `SettingsStore` for its profile through `ProfileRuntimeContainer`.
+Settings are profile-scoped runtime state. Each active `ProfileRuntime` owns exactly one live `SettingsStore` for its profile through `ProfileRuntimeContainer`. A runtime may be active for UI/settings while its service lifecycle state is `stopped`.
 
 The Firestore shape is fixed:
 
@@ -475,6 +478,8 @@ Each settings scope is one Firestore document. Each document stores key/value fi
 ```text
 AccountProfiles/{profileId}/Settings/whatsappCrawling
 AccountProfiles/{profileId}/Settings/whatsappWebView
+AccountProfiles/{profileId}/Settings/aiConnection
+AccountProfiles/{profileId}/Settings/mcpServer
 AccountProfiles/{profileId}/Settings/commandCenter
 AccountProfiles/{profileId}/Settings/app
 ```
@@ -485,15 +490,26 @@ The intended runtime ownership is:
 
 ```text
 ProfileRuntimeContainer
-└── SettingsStore / ProfileSettings
-    ├── profileId
-    ├── scopesByName[name: SettingsScope]
-    ├── startListening()
-    ├── stopListening()
-    ├── scope(name)
-    ├── value(scope, key)
-    ├── setValue(scope, key, value)
-    └── deleteValue(scope, key)
+├── SettingsStore / ProfileSettings
+│   ├── profileId
+│   ├── scopesByName[name: SettingsScope]
+│   ├── startListening()
+│   ├── stopListening()
+│   ├── scope(name)
+│   ├── value(scope, key)
+│   ├── setValue(scope, key, value)
+│   └── deleteValue(scope, key)
+│
+└── ProfileRuntimeServiceRegistry
+    ├── WhatsApp WebView service
+    ├── WhatsApp Crawling/Polling service boundary
+    ├── AI Connection service boundary
+    └── MCP Server service boundary
+
+└── ProfileRuntimeStatusRegistry
+    ├── WhatsApp status provider
+    ├── AI Connection status provider
+    └── MCP Server status provider
 ```
 
 `SettingsStore` is the only settings layer that talks to Firebase. It loads scope documents, listens to Firebase changes, updates the existing in-memory scope objects, exposes simple accessors to features, and saves key/value changes back to Firebase.
@@ -511,6 +527,46 @@ Startup:
 - wrappers read values from memory synchronously
 - wrappers write values to memory synchronously (UI updates immediately)
 - `SettingsStore` persists changes to Firebase in the background (typically debounced per scope)
+
+### Profile runtime subservices
+
+`ProfileRuntimeContainer` owns profile-scoped subservices through `ProfileRuntimeServiceRegistry`. A subservice has a stable id, title, state, `start()`, and `stop()`. The registry is intentionally small: it stores service instances, supports lookup by id, can start selected services, and can stop all services.
+
+Subservices are controlled independently from the profile window. Creating or ensuring the runtime container may register service instances for later use, but it must not start WhatsApp WebView, crawling/polling, AI connection, MCP server, or any other service just because the CommandCenter window opens.
+
+`autoStart` is per service, not one vague profile runtime switch. Profile Start starts only services whose own settings enable autoStart. Profile Stop calls the registry to stop all running subservices for that profile. Later UI and badges should read service states from this registry instead of inferring service health from `ProfileRuntimeState`.
+
+WhatsApp WebView and WhatsApp Crawling/Polling are separate services:
+
+- WhatsApp WebView owns the profile's in-memory `WKWebView` and may run while polling is stopped.
+- WhatsApp Crawling/Polling periodically reads or interacts with WhatsApp and can be paused or stopped independently.
+- Future crawling, send-message, and refresh flows should pause or stop polling without destroying the WebView unless the WebView service itself is stopped.
+
+The `WKWebView` belongs to the profile runtime service. CommandCenter routes must render the service-owned view and must not create a second `WKWebView` for the same profile. If the WebView service is stopped, no view exists; if the service starts, it creates the view; if the service stops, it destroys the view.
+
+Embedded and detached hosting must move the same service-owned `WKWebView` between containers. Embedded CommandCenter hosting should attach the existing view to its SwiftUI/AppKit bridge. Future detached windows should host that same instance temporarily and return it to the embedded route when the detached window closes.
+
+Current service autoStart settings:
+
+- `whatsappWebView.autoStart`
+- `whatsappCrawling.autoStart`
+- `aiConnection.autoStart`
+- `mcpServer.autoStart`
+
+### Profile runtime status/actions
+
+`ProfileRuntimeStatusRegistry` is the service status/action counterpart to `SettingsSectionRegistry`. Owning features register profile-runtime-scoped status providers, and the profile UI renders the resulting status items. Profiles and CommandCenter should not hardcode every service's internal rules.
+
+A status item is intentionally small: id, title, state label, optional detail, optional action title, and optional async action. Actions are contextual start/stop controls for now; restart, open/show, and diagnostics can be added later without changing the profile UI rendering model.
+
+CommandCenter may render status items while services are stopped. Opening the profile window may ensure service instances and status providers exist for display, but it must not start the underlying services.
+
+Runtime status rendering rules:
+
+- Feature runtime status providers own status/action data.
+- CommandCenter owns the shared compact visual rendering of header badges.
+- Old hardcoded Runtime/Window/MCP header pills must not coexist with runtime status registry badges.
+- Service state should appear as compact badges in the header, not duplicated large rows.
 
 Repository methods remain async because they are the persistence boundary. Wrappers must not call `loadScope(...)` for normal setting reads and must not `await` setting writes.
 
@@ -655,6 +711,14 @@ AccountProfiles/{profileId}/Settings/whatsappWebView
 
 `whatsappWebView` owns URL, user agent, zoom, viewport size, Web Inspector flag, and the stable profile-specific WebView data store identifier. The identifier is a generated technical setting; `WhatsAppWebViewSettingsWrapper` creates it once if missing and persists it through `SettingsStore`.
 
+WhatsApp WebView can capture User-Agent from the default browser through a temporary localhost server. The capture server binds only to `127.0.0.1`, uses a random port and random token path, reads the incoming HTTP `User-Agent` header, returns a small close-page HTML, and stops immediately after handling capture flow completion. Captured User-Agent values are stored in the `whatsappWebView` settings scope.
+
+An empty `whatsappWebView.userAgent` means no manual/captured value is currently stored. The user can manually refresh User-Agent from WebView settings, and optional auto-refresh can recapture after a configured day interval.
+
+When WebView startup needs User-Agent capture (missing value or expired auto-refresh window), startup may block until capture returns. `BrowserUserAgentCaptureService` should resume as soon as a valid `User-Agent` header is received on the tokenized localhost URL; listener cleanup and browser tab/window close are best-effort and must not delay WebView startup.
+
+Settings memory updates are synchronous in `SettingsStore`; Firebase persistence can happen later and must not block `WKWebView` creation/load after capture.
+
 All of these settings are stored as strings in `SettingsStore`. The wrappers convert them to and from enums, integers, doubles, and booleans as needed. If parsing fails, the wrapper returns the feature default.
 
 Native integration settings live under `Sources/Features/WhatsAppCrawling/Integrations/Native/Settings/` and persist in:
@@ -692,7 +756,7 @@ The intended `openWindow` flow inside a runtime is:
 
 ```text
 ProfileRuntime.openWindow()
-├── ensures runtime is running
+├── ensures ProfileRuntimeContainer exists for UI/settings
 ├── calls windowManaging.showProfileWindow(profile)
 │   └── AppWindowManager.showProfileWindow(profile)
 │       ├── if window already exists in profileWindows[profileId]
@@ -723,6 +787,8 @@ ProfileRuntime.openWindow()
 └── runtime.windowState = visible
 ```
 
+Opening a profile window is independent from starting profile services. It must not start WhatsApp WebView rendering, crawling/polling, AI connection services, MCP servers, or other service runtimes. The CommandCenter may render while `ProfileRuntimeState` is `stopped`; it receives profile context and settings registries from the ensured container.
+
 The intended `hideWindow` flow is:
 
 ```text
@@ -740,15 +806,19 @@ ProfileRuntime.hideWindow()
 The intended `stop` flow is:
 
 ```text
-ProfileRuntime.stop()
-├── hideWindow()
-├── stops future tasks
-├── stops future MCP server
-├── stops future WhatsApp runtime
-├── cancels future assistant loop
+ProfileRuntime.stopServices()
+├── asks ProfileRuntimeServiceRegistry to stop all services
+│   ├── stops future MCP server
+│   ├── stops future WhatsApp runtime
+│   ├── stops future AI connection
+│   └── cancels future assistant loop
 ├── runtime.state = stopped
-└── ProfilesController removes it from runningProfiles or keeps it as stopped
+└── keeps ProfileWindowState unchanged
 ```
+
+Start Profile controls service startup only. It starts the profile runtime container if needed, reads profile-scoped settings, and starts only subservices with their own autoStart enabled. It does not need to open the profile window.
+
+Stop Profile controls service shutdown only. It stops all running subservices for that profile and does not necessarily close or hide the window. Hiding or closing the profile window only changes `ProfileWindowState`; it does not stop subservices.
 
 ### Tray architecture
 
@@ -814,7 +884,7 @@ TrayIconController
 
 ### Command Center workspace
 
-`CommandCenter` is the main visual workspace for one running profile. It is not the profile registry/list screen, and it does not own profile lifecycle, repositories, MCP startup, WhatsApp runtime startup, or AppKit window creation.
+`CommandCenter` is the main visual workspace for one profile. It may be open while profile services are stopped. It is not the profile registry/list screen, and it does not own profile lifecycle, repositories, MCP startup, WhatsApp runtime startup, AI connection startup, or AppKit window creation.
 
 The profile window composition is:
 
@@ -863,7 +933,7 @@ My Data
 
 WhatsApp Integration
 ├── Chats -> Chats/ChatsPlaceholderScreen
-├── WebView -> WhatsAppCrawling/Integrations/WebView/Screens/WhatsAppWebViewPlaceholderScreen
+├── WebView -> WhatsAppCrawling/Integrations/WebView/Screens/WhatsAppWebViewScreen
 ├── Web YAML Debug -> WhatsAppCrawling/Integrations/WebView/Screens/WhatsAppWebYAMLDebugPlaceholderScreen
 ├── Native YAML Debug -> WhatsAppCrawling/Integrations/Native/Screens/WhatsAppNativeYAMLDebugPlaceholderScreen
 └── Logs -> WhatsAppCrawling/WhatsAppLogsPlaceholderScreen

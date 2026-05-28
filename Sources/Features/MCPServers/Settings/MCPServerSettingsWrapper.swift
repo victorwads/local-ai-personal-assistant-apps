@@ -1,8 +1,8 @@
 import Foundation
 
 @MainActor
-final class AIConnectionSettingsWrapper {
-    private static let scopeName = "aiConnection"
+final class MCPServerSettingsWrapper {
+    private static let scopeName = "mcpServer"
 
     private let settings: SettingsStore
 
@@ -12,7 +12,6 @@ final class AIConnectionSettingsWrapper {
 
     private enum Key {
         static let autoStart = "autoStart"
-        static let baseURL = "baseURL"
     }
 
     var autoStart: Bool {
@@ -21,16 +20,6 @@ final class AIConnectionSettingsWrapper {
         }
         set {
             settings.setValue(scope: Self.scopeName, key: Key.autoStart, value: newValue ? "true" : "false")
-        }
-    }
-
-    var baseURL: String {
-        get {
-            let value = settings.value(scope: Self.scopeName, key: Key.baseURL) ?? ""
-            return value.isEmpty ? "http://localhost:1234" : value
-        }
-        set {
-            settings.setValue(scope: Self.scopeName, key: Key.baseURL, value: newValue)
         }
     }
 }

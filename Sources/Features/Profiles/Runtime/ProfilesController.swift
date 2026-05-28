@@ -99,7 +99,6 @@ final class ProfilesController: ObservableObject {
     }
 
     func stopProfile(profileId: String) async {
-        runtimeController.hideProfileWindow(profileId: profileId)
         await runtimeController.stopProfile(profileId: profileId)
         objectWillChange.send()
     }

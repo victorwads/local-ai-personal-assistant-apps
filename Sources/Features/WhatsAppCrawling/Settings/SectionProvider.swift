@@ -10,14 +10,21 @@ struct WhatsAppCrawlingSettingsSectionProvider: SettingsSectionProvider {
         [
             SettingsSectionDefinition(
                 scopeName: "whatsappCrawling",
-                title: "WhatsApp Crawling"
+                title: "WhatsApp Crawling/Polling"
             ) {
                 AnyView(
                     WhatsAppCrawlingSettingsView(
                         crawlingSettings: crawlingSettings,
-                        webViewSettings: webViewSettings,
                         nativeSettings: nativeSettings
                     )
+                )
+            },
+            SettingsSectionDefinition(
+                scopeName: "whatsappWebView",
+                title: "WhatsApp WebView"
+            ) {
+                AnyView(
+                    WhatsAppWebViewSettingsView(wrapper: webViewSettings)
                 )
             }
         ]

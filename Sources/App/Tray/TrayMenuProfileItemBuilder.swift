@@ -49,12 +49,10 @@ public final class TrayMenuProfileItemBuilder {
             submenu.addItem(actionItem(title: "Start") { actions.start(profileId) })
         }
 
-        if displayState.runtimeState == .running {
-            if displayState.windowState == .visible {
-                submenu.addItem(actionItem(title: "Hide Window") { actions.hideWindow(profileId) })
-            } else {
-                submenu.addItem(actionItem(title: "Show Window") { actions.showWindow(profileId) })
-            }
+        if displayState.windowState == .visible {
+            submenu.addItem(actionItem(title: "Hide Window") { actions.hideWindow(profileId) })
+        } else {
+            submenu.addItem(actionItem(title: "Show Window") { actions.showWindow(profileId) })
         }
 
         submenu.addItem(NSMenuItem.separator())

@@ -22,10 +22,11 @@ final class WebViewWhatsAppCrawlingService: WhatsAppCrawlingService {
     }
 
     func start() async {
-        guard state == .stopped else { return }
+        guard state == .stopped || isFailed else { return }
         state = .starting
 
         do {
+            await refreshUserAgentIfNeeded()
             let webView = try makeWebView()
             self.webView = webView
 
@@ -34,7 +35,6 @@ final class WebViewWhatsAppCrawlingService: WhatsAppCrawlingService {
                 webView.load(URLRequest(url: url))
             }
 
-            // TODO: Later, CommandCenter WebView route should show this same WKWebView instance.
             // TODO: Later, a detached WebView window can temporarily host this WKWebView.
             // TODO: Later, closing the detached window should return the WebView to the CommandCenter route.
             // TODO: Later, JavaScript injection and YAML extraction will run against this WKWebView.
@@ -87,6 +87,32 @@ final class WebViewWhatsAppCrawlingService: WhatsAppCrawlingService {
         }
 
         return webView
+    }
+
+    private func refreshUserAgentIfNeeded() async {
+        let needsInitialCapture = (settings.userAgent ?? "").isEmpty
+        let needsAutoRefresh = settings.userAgentAutoRefreshEnabled && isRefreshExpired()
+
+        guard needsInitialCapture || needsAutoRefresh else {
+            return
+        }
+
+        do {
+            let service = BrowserUserAgentCaptureService()
+            let userAgent = try await service.captureUserAgent()
+            settings.userAgent = userAgent
+            settings.lastUserAgentRefreshDate = Date()
+        } catch {
+            print("TODO: User-Agent capture failed for WhatsApp WebView: \(error.localizedDescription)")
+        }
+    }
+
+    private func isRefreshExpired(now: Date = Date()) -> Bool {
+        guard let lastRefresh = settings.lastUserAgentRefreshDate else { return true }
+        let intervalDays = settings.userAgentRefreshIntervalDays
+        guard intervalDays > 0 else { return true }
+        let intervalSeconds = TimeInterval(intervalDays * 86_400)
+        return now.timeIntervalSince(lastRefresh) >= intervalSeconds
     }
 
     private func makeWebsiteDataStore(identifier: String) throws -> WKWebsiteDataStore {

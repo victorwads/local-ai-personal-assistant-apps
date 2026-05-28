@@ -2,7 +2,6 @@ import SwiftUI
 
 struct WhatsAppCrawlingSettingsView: View {
     let crawlingSettings: WhatsAppCrawlingSettingsWrapper
-    let webViewSettings: WhatsAppWebViewSettingsWrapper
     let nativeSettings: WhatsAppNativeSettingsWrapper
 
     @State private var activeIntegration: WhatsAppCrawlingActiveIntegration = .webView
@@ -12,6 +11,8 @@ struct WhatsAppCrawlingSettingsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
+            Toggle("Auto Start Crawling/Polling", isOn: autoStartBinding)
+
             Picker("Active Integration", selection: activeIntegrationBinding) {
                 ForEach(WhatsAppCrawlingActiveIntegration.allCases) { integration in
                     Text(integration.title).tag(integration)
@@ -30,14 +31,8 @@ struct WhatsAppCrawlingSettingsView: View {
                 }
             }
 
-            Toggle("Auto Start", isOn: autoStartBinding)
-
-            Divider()
-
-            switch activeIntegration {
-            case .webView:
-                WhatsAppWebViewSettingsView(wrapper: webViewSettings)
-            case .nativeAccessibility:
+            if activeIntegration == .nativeAccessibility {
+                Divider()
                 WhatsAppNativeSettingsView(wrapper: nativeSettings)
             }
         }

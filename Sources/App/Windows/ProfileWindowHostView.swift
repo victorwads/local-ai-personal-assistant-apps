@@ -20,7 +20,9 @@ struct ProfileWindowHostView: View {
                 profile: profile,
                 runtimeState: profilesController.displayState(for: profile).runtimeState,
                 windowState: profilesController.displayState(for: profile).windowState,
-                settingsSectionRegistry: runtime?.container?.settingsSectionRegistry
+                settingsSectionRegistry: runtime?.container?.settingsSectionRegistry,
+                statusRegistry: runtime?.container?.statusRegistry,
+                whatsAppWebViewService: runtime?.container?.whatsAppWebViewService
             )
         } else {
             VStack(spacing: 12) {

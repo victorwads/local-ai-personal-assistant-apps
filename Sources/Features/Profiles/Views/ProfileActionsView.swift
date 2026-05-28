@@ -18,14 +18,12 @@ struct ProfileActionsView: View {
                     .buttonStyle(.borderedProminent)
             }
 
-            if runtimeState == .running {
-                if windowState == .visible {
-                    Button("Hide Window") { onHideWindow() }
-                        .buttonStyle(.bordered)
-                } else {
-                    Button("Open Window") { onShowWindow() }
-                        .buttonStyle(.bordered)
-                }
+            if windowState == .visible {
+                Button("Hide Window") { onHideWindow() }
+                    .buttonStyle(.bordered)
+            } else {
+                Button("Open Window") { onShowWindow() }
+                    .buttonStyle(.bordered)
             }
         }
     }

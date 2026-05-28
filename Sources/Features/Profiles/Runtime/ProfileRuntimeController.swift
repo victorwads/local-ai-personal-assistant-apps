@@ -37,7 +37,7 @@ final class ProfileRuntimeController: ObservableObject {
             return
         }
         do {
-            try await runtime.start()
+            try await runtime.startServices()
         } catch {
             // ProfileRuntime is responsible for transitioning to .failed; controller keeps UI updated.
             print("ProfileRuntimeController: failed to start profile \(profile.id ?? ""): \(error)")
@@ -47,27 +47,29 @@ final class ProfileRuntimeController: ObservableObject {
 
     func stopProfile(profileId: String) async {
         guard let runtime = registry.runtime(for: profileId) else { return }
-        windowManager?.hideProfileWindow(profileId: profileId)
-        await runtime.stop()
-        registry.removeRuntime(for: profileId)
+        await runtime.stopServices()
         objectWillChange.send()
     }
 
     func openProfileWindow(_ profile: Profile) async {
-        guard let profileId = profile.id, !profileId.isEmpty else { return }
-
-        if registry.runtime(for: profileId) == nil {
-            await startProfile(profile)
+        guard let profileId = profile.id, !profileId.isEmpty else {
+            return
         }
 
-        windowManager?.showProfileWindow(profile: profile)
-        registry.runtime(for: profileId)?.setWindowState(.visible)
+        guard let runtime = registry.upsertRuntime(for: profile) else {
+            return
+        }
+
+        do {
+            try await runtime.openWindow(using: windowManager)
+        } catch {
+            print("ProfileRuntimeController: failed to open profile window \(profileId): \(error)")
+        }
         objectWillChange.send()
     }
 
     func hideProfileWindow(profileId: String) {
-        windowManager?.hideProfileWindow(profileId: profileId)
-        registry.runtime(for: profileId)?.setWindowState(.hidden)
+        registry.runtime(for: profileId)?.hideWindow(using: windowManager)
         objectWillChange.send()
     }
 
