@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct CommandCenterScreen: View {
     let profile: Profile
@@ -44,6 +45,16 @@ struct CommandCenterScreen: View {
             .frame(minWidth: 620, minHeight: 520)
         }
         .frame(minWidth: 900, minHeight: 560)
+        .toolbar {
+            ToolbarItem(placement: .navigation) {
+                Button {
+                    toggleSidebar()
+                } label: {
+                    Image(systemName: "sidebar.leading")
+                }
+                .help("Toggle Sidebar")
+            }
+        }
         .onChange(of: whatsAppWebViewService.presentationMode) { mode in
             guard mode == .detached else { return }
             if selectedRoute == .whatsappWebView {
@@ -70,5 +81,9 @@ struct CommandCenterScreen: View {
         if selectedRoute == .whatsappWebView {
             selectedRoute = .myProfile
         }
+    }
+
+    private func toggleSidebar() {
+        NSApp.sendAction(#selector(NSSplitViewController.toggleSidebar(_:)), to: nil, from: nil)
     }
 }

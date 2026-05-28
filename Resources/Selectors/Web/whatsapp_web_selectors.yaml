@@ -32,10 +32,12 @@ web:
           chat_clickable_to_open_options:
             type: element
             selector: "[data-testid]"
+            interactive: true
 
           chat_clickable_to_open_chat:
             type: element
             selector: '[data-testid="cell-frame-container"]'
+            interactive: true
 
           chat_item_name:
             type: text
@@ -60,7 +62,7 @@ web:
                 value_from:
                   - "textContent:int"
                 fallback_number: 1
-
+  
   current_chat:
     type: element
     selector: '[data-testid="conversation-panel-wrapper"]'
@@ -68,39 +70,52 @@ web:
       chat_title:
         type: text
         selector: '[data-testid="conversation-info-header-chat-title"]'
-        attribute: "title"
 
       chat_input_message_box:
         type: element
-        selector: '[data-testid="conversation-compose-box-input"] [contenteditable="true"]'
+        selector: '[data-testid="conversation-compose-box-input"]'
+        interactive: true
+
+      chat_input_message_text:
+        type: text
+        selector: '[data-testid="conversation-compose-box-input"]'
 
       chat_button_send_message:
         type: element
         selector: '[data-testid="compose-btn-send"]'
+        interactive: true
 
       chat_messages:
         type: elements
-        selector: '[data-testid="msg-container"]'
+        selector: '[role="row"]'
         extract:
+          is_audio:
+            selector: '[aria-label~="voz"]'
+            type: boolean
+
+          is_image:
+            selector: '[data-testid="image-thumb"]'
+            type: boolean
+
+          is_sticker:
+            selector: '[data-testid="sticker-container"]'
+            type: boolean
+
+          message_id:
+            selector: '[data-id]'
+            type: text
+            attribute: 'data-id'
+
           message_text:
             type: text
             selector: '[data-testid="selectable-text"]'
 
+          message_datetime_and_author:
+            type: text
+            selector: '[data-pre-plain-text]'
+            attribute: "data-pre-plain-text"
+
           message_time:
             type: text
-            selector: '[data-testid="msg-meta"]'
-            attribute: "aria-label"
+            selector: '[data-testid="msg-meta"] span'
 
-          message_status:
-            type: text
-            selector: '[data-testid^="msg-"]'
-            attribute: "data-testid"
-
-          message_author:
-            type: text
-            selector: '[data-testid="author"]'
-            attribute: "title"
-
-          message_kind:
-            type: text
-            selector: "[data-testid]"

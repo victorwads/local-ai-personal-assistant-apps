@@ -12,6 +12,7 @@ final class WebViewWhatsAppCrawlingService: ObservableObject, WhatsAppCrawlingSe
     private let profileId: String
     private let settings: WhatsAppWebViewSettingsWrapper
     private var detachedWindowController: WhatsAppWebViewDetachedWindowController?
+    private var navigationDelegateProxy: NavigationDelegateProxy?
 
     @Published private(set) var state: WhatsAppCrawlingServiceState = .stopped
     @Published private(set) var presentationMode: WebViewPresentationMode = .embedded
@@ -37,16 +38,25 @@ final class WebViewWhatsAppCrawlingService: ObservableObject, WhatsAppCrawlingSe
             await refreshUserAgentIfNeeded()
             let webView = try makeWebView()
             self.webView = webView
+            attachNavigationDelegate(to: webView)
 
-            let urlString = settings.url
-            if let url = URL(string: urlString) {
-                webView.load(URLRequest(url: url))
+            let urlString = settings.url.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard
+                !urlString.isEmpty,
+                let url = URL(string: urlString),
+                let scheme = url.scheme?.lowercased(),
+                scheme == "http" || scheme == "https"
+            else {
+                throw WebViewWhatsAppCrawlingServiceError.invalidURL(urlString)
             }
+
+            webView.load(URLRequest(url: url))
 
             presentationMode = .embedded
             state = .started
         } catch {
             self.webView = nil
+            navigationDelegateProxy = nil
             presentationMode = .embedded
             state = .failed(error.localizedDescription)
         }
@@ -58,7 +68,9 @@ final class WebViewWhatsAppCrawlingService: ObservableObject, WhatsAppCrawlingSe
         closeDetachedWindow()
 
         webView?.stopLoading()
+        webView?.navigationDelegate = nil
         webView = nil
+        navigationDelegateProxy = nil
         presentationMode = .embedded
 
         state = .stopped
@@ -172,15 +184,59 @@ final class WebViewWhatsAppCrawlingService: ObservableObject, WhatsAppCrawlingSe
         detachedWindowController.close()
         self.detachedWindowController = nil
     }
+
+    private func attachNavigationDelegate(to webView: WKWebView) {
+        let proxy = NavigationDelegateProxy(service: self)
+        navigationDelegateProxy = proxy
+        webView.navigationDelegate = proxy
+    }
+
+    fileprivate func handleNavigationFailed(_ error: Error) {
+        // Keep service alive for UI/debug, but surface failure clearly.
+        state = .failed(error.localizedDescription)
+    }
+
+    fileprivate func logNavigationEvent(_ message: String) {
+        print("WebViewWhatsAppCrawlingService[\(profileId)]: \(message)")
+    }
 }
 
 private enum WebViewWhatsAppCrawlingServiceError: LocalizedError {
     case missingWebsiteDataStoreIdentifier(profileId: String)
+    case invalidURL(String)
 
     var errorDescription: String? {
         switch self {
         case .missingWebsiteDataStoreIdentifier(let profileId):
             return "Missing WhatsApp WebView data store identifier for profile \(profileId)."
+        case .invalidURL(let value):
+            return "Invalid WhatsApp WebView URL: \(value)"
         }
+    }
+}
+
+private final class NavigationDelegateProxy: NSObject, WKNavigationDelegate {
+    private weak var service: WebViewWhatsAppCrawlingService?
+
+    init(service: WebViewWhatsAppCrawlingService) {
+        self.service = service
+    }
+
+    func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        service?.logNavigationEvent("didStartProvisionalNavigation")
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        service?.logNavigationEvent("didFinishNavigation")
+    }
+
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: any Error) {
+        service?.logNavigationEvent("didFailNavigation: \(error.localizedDescription)")
+        service?.handleNavigationFailed(error)
+    }
+
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: any Error) {
+        service?.logNavigationEvent("didFailProvisionalNavigation: \(error.localizedDescription)")
+        service?.handleNavigationFailed(error)
     }
 }

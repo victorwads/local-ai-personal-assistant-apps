@@ -13,6 +13,20 @@ enum WebViewJavaScripts {
 (() => {
   const root = window;
   const existing = root.AssistantMCP && typeof root.AssistantMCP === "object" ? root.AssistantMCP : {};
+  let elementRegistry = {};
+  let elementCounter = 0;
+
+  function resetElementRegistry() {
+    elementRegistry = {};
+    elementCounter = 0;
+  }
+
+  function registerInteractiveElement(element) {
+    elementCounter += 1;
+    const id = "amcp_el_" + elementCounter;
+    elementRegistry[id] = element;
+    return { "$element": true, id };
+  }
 
   function normalizeSelectors(node) {
     if (!node || typeof node !== "object") return [];
@@ -55,8 +69,39 @@ enum WebViewJavaScripts {
 
   function textFromElement(element) {
     if (!element) return null;
-    const raw = (element.innerText ?? element.textContent ?? "").trim();
+    const raw = getReadableText(element).trim();
     return raw.length > 0 ? raw : null;
+  }
+
+  function getReadableText(node) {
+    if (!node) return "";
+
+    if (node.nodeType === Node.TEXT_NODE) {
+      return node.textContent || "";
+    }
+
+    if (node.nodeType !== Node.ELEMENT_NODE) {
+      return "";
+    }
+
+    const el = node;
+
+    if (el.tagName === "IMG") {
+      return (
+        el.getAttribute("data-plain-text") ||
+        el.getAttribute("alt") ||
+        el.getAttribute("aria-label") ||
+        ""
+      );
+    }
+
+    if (el.getAttribute("aria-hidden") === "true") {
+      return "";
+    }
+
+    return Array.from(el.childNodes)
+      .map(getReadableText)
+      .join("");
   }
 
   function parseNumber(text) {
@@ -88,6 +133,10 @@ enum WebViewJavaScripts {
       return node.fallback_number;
     }
     return null;
+  }
+
+  function isInteractiveNode(node) {
+    return Boolean(node && typeof node === "object" && node.interactive === true);
   }
 
   function nodeAttribute(node) {
@@ -214,6 +263,9 @@ enum WebViewJavaScripts {
 
     const element = firstElement(context, node);
     if (!element) return null;
+    if (isInteractiveNode(node)) {
+      return registerInteractiveElement(element);
+    }
     const children = childrenFromNode(node);
     if (children) {
       return extractChildren(children, element);
@@ -223,6 +275,7 @@ enum WebViewJavaScripts {
 
   function extractTree(spec) {
     try {
+      resetElementRegistry();
       if (!spec || typeof spec !== "object") {
         return { web: {}, flows: {} };
       }
@@ -249,6 +302,167 @@ enum WebViewJavaScripts {
       return result;
     } catch (_) {
       return { web: {}, flows: {} };
+    }
+  }
+
+  function dispatchMouseSequence(element) {
+    const rect = element.getBoundingClientRect();
+    const clientX = rect.left + rect.width / 2;
+    const clientY = rect.top + rect.height / 2;
+    const mouseInit = {
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      view: window,
+      clientX,
+      clientY
+    };
+    const pointerInit = {
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      pointerType: "mouse",
+      isPrimary: true,
+      clientX,
+      clientY
+    };
+
+    const pointerEvents = ["pointerover", "pointerenter", "pointerdown", "pointerup"];
+    for (const type of pointerEvents) {
+      try { element.dispatchEvent(new PointerEvent(type, pointerInit)); } catch (_) {}
+    }
+
+    const mouseEvents = ["mouseover", "mouseenter", "mousedown", "mouseup", "click"];
+    for (const type of mouseEvents) {
+      try { element.dispatchEvent(new MouseEvent(type, mouseInit)); } catch (_) {}
+    }
+  }
+
+  function interactWithElement(id, action, payload) {
+    try {
+      if (typeof id !== "string" || id.trim().length === 0) return false;
+      if (typeof action !== "string" || action.trim().length === 0) return false;
+      const element = elementRegistry[id];
+      if (!element) return false;
+
+      const normalizedAction = action.trim();
+      try { element.scrollIntoView({ block: "center", inline: "center" }); } catch (_) {}
+
+      if (normalizedAction === "click") {
+        try { if (typeof element.focus === "function") element.focus(); } catch (_) {}
+        dispatchMouseSequence(element);
+        try { if (typeof element.click === "function") element.click(); } catch (_) {}
+        return true;
+      }
+
+      if (normalizedAction === "focus") {
+        try { if (typeof element.focus === "function") element.focus(); } catch (_) {}
+        return true;
+      }
+
+      if (normalizedAction === "type") {
+        if (!payload || typeof payload !== "object") return false;
+        if (typeof payload.text !== "string") return false;
+        const text = payload.text;
+        try { if (typeof element.focus === "function") element.focus(); } catch (_) {}
+
+        if (element.isContentEditable) {
+          let insertSucceeded = (() => {
+            try {
+              if (typeof document.execCommand === "function") {
+                try { document.execCommand("selectAll", false, null); } catch (_) {}
+                try { document.execCommand("delete", false, null); } catch (_) {}
+                return document.execCommand("insertText", false, text) === true;
+              }
+            } catch (_) {}
+            return false;
+          })();
+
+          if (!insertSucceeded) {
+            try {
+              element.textContent = text;
+            } catch (_) {}
+          }
+
+          try {
+            element.dispatchEvent(new InputEvent("input", {
+              inputType: "insertText",
+              data: text,
+              bubbles: true,
+              cancelable: true,
+              composed: true
+            }));
+          } catch (_) {}
+          return true;
+        }
+
+        if ("value" in element && typeof element.value === "string") {
+          try {
+            if (typeof element.select === "function") {
+              try { element.select(); } catch (_) {}
+            }
+
+            if (typeof element.setSelectionRange === "function" && typeof element.setRangeText === "function") {
+              try {
+                const current = String(element.value || "");
+                element.setSelectionRange(0, current.length);
+                element.setRangeText(text);
+              } catch (_) {
+                element.value = text;
+              }
+            } else {
+              element.value = text;
+            }
+
+            element.dispatchEvent(new Event("input", { bubbles: true, cancelable: true, composed: true }));
+            element.dispatchEvent(new Event("change", { bubbles: true, cancelable: true, composed: true }));
+            return true;
+          } catch (_) {
+            return false;
+          }
+        }
+
+        return false;
+      }
+
+      if (normalizedAction === "pressEnter") {
+        try { if (typeof element.focus === "function") element.focus(); } catch (_) {}
+        const init = {
+          key: "Enter",
+          code: "Enter",
+          keyCode: 13,
+          which: 13,
+          bubbles: true,
+          cancelable: true,
+          composed: true
+        };
+        try {
+          element.dispatchEvent(new KeyboardEvent("keydown", init));
+          element.dispatchEvent(new KeyboardEvent("keyup", init));
+          return true;
+        } catch (_) {
+          return false;
+        }
+      }
+
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function interactWithElementCommand(command) {
+    try {
+      if (!command || typeof command !== "object") return false;
+      const id = typeof command.id === "string" ? command.id : "";
+      const action = typeof command.action === "string" ? command.action : "";
+      const payload =
+        command.payload && typeof command.payload === "object"
+          ? command.payload
+          : null;
+      return interactWithElement(id, action, payload);
+    } catch (_) {
+      return false;
     }
   }
 
@@ -327,7 +541,9 @@ enum WebViewJavaScripts {
   root.AssistantMCP = {
     ...existing,
     extractTree,
-    executeShortcut
+    executeShortcut,
+    interactWithElement,
+    interactWithElementCommand
   };
 })();
 """#

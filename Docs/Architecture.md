@@ -737,7 +737,15 @@ The bridge is generic and shared by both future Web debug screens and crawling o
 
 Selector YAML files for WhatsApp Web live under `Resources/Selectors/Web`. The Web YAML Debug screen loads the bundled YAML, builds a generic extraction spec from `web`/`flows`, and executes it against the profile-owned `WKWebView` through `window.AssistantMCP.extractTree(spec)`.
 
-Current debug output is intentionally the raw formatted JSON result. A recursive red/green visual tree may come later. Extraction output intentionally mirrors the YAML shape and avoids artificial metadata wrappers like `found/type/children`.
+Web YAML Debug currently provides both a raw formatted JSON view and a recursive red/green tree view. Extraction output intentionally mirrors the YAML shape and avoids artificial metadata wrappers like `found/type/children`.
+
+YAML nodes may mark element selectors as interactive with `interactive: true`. Interactive nodes return minimal element handles in extraction results: `{ "$element": true, "id": "..." }`.
+
+Interactive handles are valid only for the latest `extractTree` snapshot. The JavaScript bridge keeps an internal DOM element registry and rebuilds it on each extraction call.
+
+Swift-side interaction uses `WebViewElementInteractor`, which calls `window.AssistantMCP.interactWithElement(id, action, payload)` for actions like click/focus/type/pressEnter. The debug tree can show action buttons for interactive handles.
+
+Extraction JSON remains clean; it does not include debug metadata beyond explicit interactive element handles.
 
 All of these settings are stored as strings in `SettingsStore`. The wrappers convert them to and from enums, integers, doubles, and booleans as needed. If parsing fails, the wrapper returns the feature default.
 

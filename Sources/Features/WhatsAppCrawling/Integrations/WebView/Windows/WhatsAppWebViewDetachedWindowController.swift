@@ -27,38 +27,20 @@ final class WhatsAppWebViewDetachedWindowController: NSWindowController, NSWindo
 
     override func showWindow(_ sender: Any?) {
         super.showWindow(sender)
-        attachAndRefresh()
+        attach()
     }
 
     func windowDidBecomeMain(_ notification: Notification) {
-        attachAndRefresh()
+        attach()
     }
 
     func windowWillClose(_ notification: Notification) {
         service?.detachedWindowDidClose()
     }
 
-    private func attachAndRefresh() {
+    private func attach() {
         guard let contentController = contentViewController as? WhatsAppWebViewDetachedContentViewController else { return }
         contentController.attach(webView: webView)
-        contentController.view.needsLayout = true
-        contentController.view.layoutSubtreeIfNeeded()
-        webView.needsLayout = true
-        webView.layoutSubtreeIfNeeded()
-        webView.needsDisplay = true
-        webView.displayIfNeeded()
-
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            guard let contentController = self.contentViewController as? WhatsAppWebViewDetachedContentViewController else { return }
-            contentController.attach(webView: self.webView)
-            contentController.view.needsLayout = true
-            contentController.view.layoutSubtreeIfNeeded()
-            self.webView.needsLayout = true
-            self.webView.layoutSubtreeIfNeeded()
-            self.webView.needsDisplay = true
-            self.webView.displayIfNeeded()
-        }
     }
 }
 

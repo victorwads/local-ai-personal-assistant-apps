@@ -3,11 +3,8 @@ import SwiftUI
 struct WhatsAppWebViewScreen: View {
     @ObservedObject var service: WebViewWhatsAppCrawlingService
 
-    @State private var refreshID = UUID()
-
     var body: some View {
         Group { content(for: service) }
-        .id(refreshID)
     }
 
     @ViewBuilder
@@ -45,7 +42,6 @@ struct WhatsAppWebViewScreen: View {
                         Spacer()
                         Button {
                             service.detach()
-                            refreshID = UUID()
                         } label: {
                             Image(systemName: "rectangle.on.rectangle")
                         }
@@ -56,7 +52,6 @@ struct WhatsAppWebViewScreen: View {
                         Button("Stop") {
                             Task { @MainActor in
                                 await service.stop()
-                                refreshID = UUID()
                             }
                         }
                         .buttonStyle(.bordered)
@@ -116,7 +111,6 @@ struct WhatsAppWebViewScreen: View {
                 Button(actionTitle) {
                     Task { @MainActor in
                         await action()
-                        refreshID = UUID()
                     }
                 }
                 .buttonStyle(.borderedProminent)
