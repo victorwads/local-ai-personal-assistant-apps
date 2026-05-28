@@ -1,10 +1,17 @@
 import Foundation
 
 enum CommandCenterMenuRegistry {
-    static func sections(showDeveloperItems: Bool = true) -> [CommandCenterSection] {
+    static func sections(
+        showDeveloperItems: Bool = true,
+        isWhatsAppWebViewVisible: Bool = true
+    ) -> [CommandCenterSection] {
         allSections.compactMap { section in
             let visibleItems = section.items.filter { item in
-                isVisible(item, showDeveloperItems: showDeveloperItems)
+                isVisible(
+                    item,
+                    showDeveloperItems: showDeveloperItems,
+                    isWhatsAppWebViewVisible: isWhatsAppWebViewVisible
+                )
             }
 
             guard !visibleItems.isEmpty else {
@@ -71,7 +78,11 @@ enum CommandCenterMenuRegistry {
         )
     ]
 
-    private static func isVisible(_ item: CommandCenterMenuItem, showDeveloperItems: Bool) -> Bool {
+    private static func isVisible(
+        _ item: CommandCenterMenuItem,
+        showDeveloperItems: Bool,
+        isWhatsAppWebViewVisible: Bool
+    ) -> Bool {
         if item.developerModeOnly && !showDeveloperItems {
             return false
         }
@@ -80,8 +91,7 @@ enum CommandCenterMenuRegistry {
         case .always:
             return true
         case .whatsappWebIntegrationOrDeveloperMode:
-            // TODO: Show only when the active integration is WhatsApp Web, or when developer/debug mode allows it.
-            return true
+            return isWhatsAppWebViewVisible
         }
     }
 }

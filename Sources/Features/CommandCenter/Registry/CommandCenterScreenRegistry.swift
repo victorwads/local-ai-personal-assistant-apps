@@ -24,7 +24,14 @@ struct CommandCenterScreenRegistry {
         case .chats:
             ChatsPlaceholderScreen()
         case .whatsappWebView:
-            WhatsAppWebViewScreen(service: whatsAppWebViewService)
+            if let whatsAppWebViewService {
+                WhatsAppWebViewScreen(service: whatsAppWebViewService)
+            } else {
+                CommandCenterPlaceholderScreen(
+                    title: "WebView runtime unavailable",
+                    description: "Open the profile window from a persisted profile so the runtime container can provide the WebView service."
+                )
+            }
         case .whatsappWebYAMLDebug:
             WhatsAppWebYAMLDebugPlaceholderScreen()
         case .whatsappNativeYAMLDebug:

@@ -1,14 +1,22 @@
+import AppKit
 import Foundation
 import WebKit
 
 @MainActor
-final class WebViewWhatsAppCrawlingService: WhatsAppCrawlingService {
+final class WebViewWhatsAppCrawlingService: ObservableObject, WhatsAppCrawlingService {
+    enum WebViewPresentationMode: Equatable {
+        case embedded
+        case detached
+    }
+
     private let profileId: String
     private let settings: WhatsAppWebViewSettingsWrapper
+    private var detachedWindowController: WhatsAppWebViewDetachedWindowController?
 
-    private(set) var state: WhatsAppCrawlingServiceState = .stopped
+    @Published private(set) var state: WhatsAppCrawlingServiceState = .stopped
+    @Published private(set) var presentationMode: WebViewPresentationMode = .embedded
     let activeIntegration: WhatsAppCrawlingActiveIntegration = .webView
-    private(set) var webView: WKWebView?
+    @Published private(set) var webView: WKWebView?
 
     var integration: (any WhatsAppCrawlingIntegration)? {
         // TODO: Expose WebViewWhatsAppIntegration once JavaScriptExecutor,
@@ -35,12 +43,11 @@ final class WebViewWhatsAppCrawlingService: WhatsAppCrawlingService {
                 webView.load(URLRequest(url: url))
             }
 
-            // TODO: Later, a detached WebView window can temporarily host this WKWebView.
-            // TODO: Later, closing the detached window should return the WebView to the CommandCenter route.
-            // TODO: Later, JavaScript injection and YAML extraction will run against this WKWebView.
+            presentationMode = .embedded
             state = .started
         } catch {
             self.webView = nil
+            presentationMode = .embedded
             state = .failed(error.localizedDescription)
         }
     }
@@ -48,11 +55,40 @@ final class WebViewWhatsAppCrawlingService: WhatsAppCrawlingService {
     func stop() async {
         guard state == .started || state == .starting || isFailed else { return }
         state = .stopping
+        closeDetachedWindow()
 
         webView?.stopLoading()
         webView = nil
+        presentationMode = .embedded
 
         state = .stopped
+    }
+
+    func detach() {
+        guard state == .started, let webView else { return }
+        guard detachedWindowController == nil else {
+            detachedWindowController?.showWindow(nil)
+            detachedWindowController?.window?.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+
+        let controller = WhatsAppWebViewDetachedWindowController(service: self, webView: webView)
+        detachedWindowController = controller
+        presentationMode = .detached
+        controller.showWindow(nil)
+        controller.window?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    func reattach() {
+        closeDetachedWindow()
+        presentationMode = .embedded
+    }
+
+    func detachedWindowDidClose() {
+        detachedWindowController = nil
+        presentationMode = .embedded
     }
 
     private var isFailed: Bool {
@@ -121,6 +157,13 @@ final class WebViewWhatsAppCrawlingService: WhatsAppCrawlingService {
         }
 
         return WKWebsiteDataStore(forIdentifier: uuid)
+    }
+
+    private func closeDetachedWindow() {
+        guard let detachedWindowController else { return }
+        detachedWindowController.window?.delegate = nil
+        detachedWindowController.close()
+        self.detachedWindowController = nil
     }
 }
 

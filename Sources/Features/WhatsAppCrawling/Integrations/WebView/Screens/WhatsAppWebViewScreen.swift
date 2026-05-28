@@ -1,23 +1,12 @@
 import SwiftUI
 
 struct WhatsAppWebViewScreen: View {
-    let service: WebViewWhatsAppCrawlingService?
+    @ObservedObject var service: WebViewWhatsAppCrawlingService
 
     @State private var refreshID = UUID()
 
     var body: some View {
-        Group {
-            if let service {
-                content(for: service)
-            } else {
-                serviceStateView(
-                    title: "WebView runtime unavailable",
-                    description: "Open the profile window from a persisted profile so the runtime container can provide the WebView service.",
-                    actionTitle: nil,
-                    action: nil
-                )
-            }
-        }
+        Group { content(for: service) }
         .id(refreshID)
     }
 
@@ -41,12 +30,29 @@ struct WhatsAppWebViewScreen: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .started:
-            if let webView = service.webView {
+            if service.presentationMode == .detached {
+                serviceStateView(
+                    title: "WebView is detached",
+                    description: "WhatsApp Web is open in a separate window.",
+                    actionTitle: nil,
+                    action: nil
+                )
+            } else if let webView = service.webView {
                 VStack(spacing: 0) {
                     HStack {
                         Text("WhatsApp Web")
                             .font(.headline)
                         Spacer()
+                        Button {
+                            service.detach()
+                            refreshID = UUID()
+                        } label: {
+                            Image(systemName: "rectangle.on.rectangle")
+                        }
+                        .buttonStyle(.borderless)
+                        .controlSize(.small)
+                        .help("Open WebView in separate window")
+
                         Button("Stop") {
                             Task { @MainActor in
                                 await service.stop()

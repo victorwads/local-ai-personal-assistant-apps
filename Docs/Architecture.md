@@ -546,6 +546,15 @@ The `WKWebView` belongs to the profile runtime service. CommandCenter routes mus
 
 Embedded and detached hosting must move the same service-owned `WKWebView` between containers. Embedded CommandCenter hosting should attach the existing view to its SwiftUI/AppKit bridge. Future detached windows should host that same instance temporarily and return it to the embedded route when the detached window closes.
 
+Current detach behavior rules:
+
+- The WhatsApp WebView service owns exactly one `WKWebView`.
+- CommandCenter and detached windows only host the service-owned `WKWebView`; they never create a second one.
+- Detach moves that same `WKWebView` instance to a separate window without reload.
+- Closing the detached window reattaches to embedded mode without stopping the service.
+- Stopping the WebView service destroys the `WKWebView` and closes any detached host window.
+- While detached, CommandCenter hides the WebView sidebar route.
+
 Current service autoStart settings:
 
 - `whatsappWebView.autoStart`

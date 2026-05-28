@@ -6,17 +6,18 @@ struct CommandCenterScreen: View {
     let windowState: ProfileWindowState
     let settingsSectionRegistry: SettingsSectionRegistry?
     let statusRegistry: ProfileRuntimeStatusRegistry?
-    let whatsAppWebViewService: WebViewWhatsAppCrawlingService?
+    @ObservedObject var whatsAppWebViewService: WebViewWhatsAppCrawlingService
 
     @State private var selectedRoute: CommandCenterRoute? = .myProfile
 
-    private let sections = CommandCenterMenuRegistry.sections()
     private let screenRegistry = CommandCenterScreenRegistry()
 
     var body: some View {
         NavigationSplitView {
             CommandCenterSidebar(
                 sections: sections,
+                whatsAppWebViewService: whatsAppWebViewService,
+                onDetachWebView: detachWebViewFromSidebar,
                 selectedRoute: selectedRouteBinding
             )
         } detail: {
@@ -43,6 +44,12 @@ struct CommandCenterScreen: View {
             .frame(minWidth: 620, minHeight: 520)
         }
         .frame(minWidth: 900, minHeight: 560)
+        .onChange(of: whatsAppWebViewService.presentationMode) { mode in
+            guard mode == .detached else { return }
+            if selectedRoute == .whatsappWebView {
+                selectedRoute = .myProfile
+            }
+        }
     }
 
     private var selectedRouteBinding: Binding<CommandCenterRoute> {
@@ -50,5 +57,18 @@ struct CommandCenterScreen: View {
             get: { selectedRoute ?? .myProfile },
             set: { selectedRoute = $0 }
         )
+    }
+
+    private var sections: [CommandCenterSection] {
+        CommandCenterMenuRegistry.sections(
+            isWhatsAppWebViewVisible: whatsAppWebViewService.presentationMode == .embedded
+        )
+    }
+
+    private func detachWebViewFromSidebar() {
+        whatsAppWebViewService.detach()
+        if selectedRoute == .whatsappWebView {
+            selectedRoute = .myProfile
+        }
     }
 }
