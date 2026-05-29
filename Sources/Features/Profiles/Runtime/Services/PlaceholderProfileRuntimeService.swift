@@ -15,7 +15,7 @@ final class PlaceholderProfileRuntimeService: ProfileRuntimeService {
     func start() async {
         guard state == .stopped || isFailed else { return }
         state = .starting
-        state = .running
+        state = .failed("Not implemented")
     }
 
     func stop() async {

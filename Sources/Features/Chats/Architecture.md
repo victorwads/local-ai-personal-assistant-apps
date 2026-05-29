@@ -19,7 +19,9 @@ This document owns chat/message domain model and repository rules.
 
 - `handled` represents domain/workflow state and belongs on `ChatMessage`.
 - New crawled messages default to `handled = false`.
-- Repository upsert behavior must preserve existing `handled` values when updating an existing message.
+- Existing messages should not be upserted as full records.
+- The only supported existing-message state transition is marking messages as handled.
+- Message listing reads from Firestore local cache and returns the latest messages by repository `_createdAt`, using message `dateTime` only as a tie-breaker.
 
 ## Repository rules
 

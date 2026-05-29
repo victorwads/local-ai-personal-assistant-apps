@@ -70,19 +70,23 @@ enum WebYAMLExtractionRunner {
         case let value as NSNumber:
             return value
         case is NSNull:
-            return NSNull()
+            return nil
         case let array as [Any]:
             return array.compactMap { normalizeToJSONObject($0) }
         case let dict as [String: Any]:
             var normalized: [String: Any] = [:]
             for (key, val) in dict {
-                normalized[key] = normalizeToJSONObject(val) ?? NSNull()
+                if let normalizedValue = normalizeToJSONObject(val) {
+                    normalized[key] = normalizedValue
+                }
             }
             return normalized
         case let dict as [AnyHashable: Any]:
             var normalized: [String: Any] = [:]
             for (key, val) in dict {
-                normalized[String(describing: key)] = normalizeToJSONObject(val) ?? NSNull()
+                if let normalizedValue = normalizeToJSONObject(val) {
+                    normalized[String(describing: key)] = normalizedValue
+                }
             }
             return normalized
         default:

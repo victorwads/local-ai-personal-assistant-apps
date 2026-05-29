@@ -85,10 +85,10 @@ web:
         type: text
         selector: '[data-testid="conversation-compose-box-input"]'
 
-      chatButtonSendMessage:
-        type: element
-        selector: '[data-testid="compose-btn-send"]'
-        interactive: true
+#      chatButtonSendMessage:
+#        type: element
+#        selector: '[data-testid="compose-btn-send"]'
+#        interactive: true
 
       chatMessages:
         type: elements

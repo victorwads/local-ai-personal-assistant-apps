@@ -1,0 +1,48 @@
+import SwiftUI
+
+@MainActor
+struct WhatsAppLogsScreen: View {
+    @ObservedObject var logStore: WhatsAppCrawlingLogStore
+    @State private var autoScroll = true
+
+    private static let timeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm:ss.SSS"
+        return formatter
+    }()
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("WhatsApp Logs")
+                    .font(.title2.weight(.semibold))
+                Spacer()
+                Toggle("Auto-scroll", isOn: $autoScroll)
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                Button("Clear") {
+                    logStore.clear()
+                }
+            }
+
+            ScrollViewReader { proxy in
+                List(logStore.entries) { entry in
+                    Text(line(for: entry))
+                        .font(.system(.caption, design: .monospaced))
+                        .textSelection(.enabled)
+                        .id(entry.id)
+                }
+                .onChange(of: logStore.entries.count) { _ in
+                    guard autoScroll, let last = logStore.entries.last else { return }
+                    proxy.scrollTo(last.id, anchor: .bottom)
+                }
+            }
+        }
+        .padding()
+    }
+
+    private func line(for entry: WhatsAppCrawlingLogEntry) -> String {
+        let time = Self.timeFormatter.string(from: entry.date)
+        return "\(time)  \(entry.source.padding(toLength: 12, withPad: " ", startingAt: 0))  \(entry.message)"
+    }
+}

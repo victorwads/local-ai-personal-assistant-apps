@@ -8,6 +8,7 @@ struct CommandCenterScreen: View {
     let settingsSectionRegistry: SettingsSectionRegistry?
     let statusRegistry: ProfileRuntimeStatusRegistry?
     @ObservedObject var whatsAppWebViewService: WebViewWhatsAppCrawlingService
+    let whatsAppCrawlingLogStore: WhatsAppCrawlingLogStore
 
     @State private var selectedRoute: CommandCenterRoute? = .myProfile
 
@@ -39,6 +40,7 @@ struct CommandCenterScreen: View {
                     windowState: windowState,
                     settingsSectionRegistry: settingsSectionRegistry,
                     whatsAppWebViewService: whatsAppWebViewService,
+                    whatsAppCrawlingLogStore: whatsAppCrawlingLogStore,
                     screenRegistry: screenRegistry
                 )
             }

@@ -7,6 +7,7 @@ struct CommandCenterHeaderView: View {
     let statusRegistry: ProfileRuntimeStatusRegistry?
 
     @State private var refreshID = UUID()
+    private let refreshTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
 
     var body: some View {
         HStack(spacing: 12) {
@@ -30,6 +31,9 @@ struct CommandCenterHeaderView: View {
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
         .background(.background)
+        .onReceive(refreshTimer) { _ in
+            refreshID = UUID()
+        }
     }
 
     private func statusItemView(_ item: ProfileRuntimeStatusItem) -> some View {
@@ -40,6 +44,14 @@ struct CommandCenterHeaderView: View {
 
             Text(item.title)
                 .foregroundStyle(.secondary)
+
+            if let detail = item.detail, !detail.isEmpty {
+                Text("• \(detail)")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
 
             if let actionTitle = actionTitleToRender(for: item), let action = item.action {
                 Button {

@@ -14,6 +14,7 @@ final class ProfileRuntimeContainer {
     let whatsAppCrawlingSettings: WhatsAppCrawlingSettingsWrapper
     let whatsAppWebViewSettings: WhatsAppWebViewSettingsWrapper
     let whatsAppNativeSettings: WhatsAppNativeSettingsWrapper
+    let whatsAppCrawlingLogStore: WhatsAppCrawlingLogStore
     let serviceRegistry: ProfileRuntimeServiceRegistry
     let statusRegistry: ProfileRuntimeStatusRegistry
 
@@ -34,6 +35,7 @@ final class ProfileRuntimeContainer {
         self.whatsAppCrawlingSettings = WhatsAppCrawlingSettingsWrapper(settings: settings)
         self.whatsAppWebViewSettings = WhatsAppWebViewSettingsWrapper(settings: settings)
         self.whatsAppNativeSettings = WhatsAppNativeSettingsWrapper(settings: settings)
+        self.whatsAppCrawlingLogStore = WhatsAppCrawlingLogStore()
         self.serviceRegistry = ProfileRuntimeServiceRegistry()
         self.statusRegistry = ProfileRuntimeStatusRegistry()
         self.settingsSectionRegistry = SettingsSectionRegistry()
@@ -78,7 +80,7 @@ final class ProfileRuntimeContainer {
 
     private func registerConfiguredServices() async throws {
         registerWhatsAppWebViewServiceIfNeeded()
-        registerPlaceholderServiceIfNeeded(id: profileRuntimeWhatsAppCrawlingServiceId, title: "WhatsApp Crawling/Polling")
+        try registerWhatsAppCrawlingServiceIfNeeded()
         registerPlaceholderServiceIfNeeded(id: profileRuntimeAIConnectionServiceId, title: "AI Connection")
         registerPlaceholderServiceIfNeeded(id: profileRuntimeMCPServerServiceId, title: "MCP Server")
         registerStatusProvidersIfNeeded()
@@ -102,6 +104,27 @@ final class ProfileRuntimeContainer {
     private func registerPlaceholderServiceIfNeeded(id: String, title: String) {
         guard serviceRegistry.service(id: id) == nil else { return }
         serviceRegistry.register(PlaceholderProfileRuntimeService(id: id, title: title))
+    }
+
+    private func registerWhatsAppCrawlingServiceIfNeeded() throws {
+        guard serviceRegistry.service(id: profileRuntimeWhatsAppCrawlingServiceId) == nil else { return }
+        guard let webViewService = whatsAppWebViewService else { return }
+        guard let scope = context.scope else { return }
+        let chatRepository = FirestoreChatRepository(scope: scope)
+        let service = try WhatsAppCrawlingPollingService(
+            profileId: context.profileId,
+            settings: whatsAppCrawlingSettings,
+            webViewService: webViewService,
+            chatRepository: chatRepository,
+            logStore: whatsAppCrawlingLogStore
+        )
+        serviceRegistry.register(
+            WhatsAppCrawlingProfileRuntimeService(
+                id: profileRuntimeWhatsAppCrawlingServiceId,
+                title: "WhatsApp Crawling/Polling",
+                service: service
+            )
+        )
     }
 
     private func shouldAutoStart(_ service: any ProfileRuntimeService) -> Bool {

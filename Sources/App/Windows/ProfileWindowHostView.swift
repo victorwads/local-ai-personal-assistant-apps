@@ -15,15 +15,19 @@ struct ProfileWindowHostView: View {
 
     var body: some View {
         if let profile = profilesController.profiles.first(where: { $0.id == profileId }) {
-            let runtime = profilesController.runtimeController.runtime(for: profileId)
-            if let webViewService = runtime?.container?.whatsAppWebViewService {
+            if
+                let runtime = profilesController.runtimeController.runtime(for: profileId),
+                let container = runtime.container,
+                let webViewService = container.whatsAppWebViewService
+            {
                 CommandCenterScreen(
                     profile: profile,
                     runtimeState: profilesController.displayState(for: profile).runtimeState,
                     windowState: profilesController.displayState(for: profile).windowState,
-                    settingsSectionRegistry: runtime?.container?.settingsSectionRegistry,
-                    statusRegistry: runtime?.container?.statusRegistry,
-                    whatsAppWebViewService: webViewService
+                    settingsSectionRegistry: container.settingsSectionRegistry,
+                    statusRegistry: container.statusRegistry,
+                    whatsAppWebViewService: webViewService,
+                    whatsAppCrawlingLogStore: container.whatsAppCrawlingLogStore
                 )
             } else {
                 VStack(spacing: 12) {

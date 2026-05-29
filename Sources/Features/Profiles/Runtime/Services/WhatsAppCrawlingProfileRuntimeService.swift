@@ -32,6 +32,10 @@ final class WhatsAppCrawlingProfileRuntimeService: ProfileRuntimeService {
         service
     }
 
+    var statusDetail: String? {
+        service.statusText
+    }
+
     func start() async {
         await service.start()
     }

@@ -18,11 +18,20 @@ struct WhatsAppRuntimeStatusProvider: ProfileRuntimeStatusProvider {
         title: String
     ) -> ProfileRuntimeStatusItem {
         let actionTitle = ProfileRuntimeServiceStatusFormatting.actionTitle(for: service.state)
+        let detailOverride: String?
+        if
+            title == "Crawling",
+            let crawlingService = service as? WhatsAppCrawlingProfileRuntimeService
+        {
+            detailOverride = crawlingService.statusDetail
+        } else {
+            detailOverride = nil
+        }
         return ProfileRuntimeStatusItem(
             id: id,
             title: title,
             stateLabel: ProfileRuntimeServiceStatusFormatting.stateLabel(for: service.state),
-            detail: ProfileRuntimeServiceStatusFormatting.detail(for: service.state),
+            detail: ProfileRuntimeServiceStatusFormatting.detail(for: service.state, fallback: detailOverride),
             actionTitle: actionTitle,
             action: actionTitle.map { _ in
                 {

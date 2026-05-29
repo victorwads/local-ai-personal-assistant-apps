@@ -8,7 +8,8 @@ struct CommandCenterScreenRegistry {
         runtimeState: ProfileRuntimeState,
         windowState: ProfileWindowState,
         settingsSectionRegistry: SettingsSectionRegistry? = nil,
-        whatsAppWebViewService: WebViewWhatsAppCrawlingService? = nil
+        whatsAppWebViewService: WebViewWhatsAppCrawlingService? = nil,
+        whatsAppCrawlingLogStore: WhatsAppCrawlingLogStore
     ) -> some View {
         switch route {
         case .myProfile:
@@ -44,7 +45,7 @@ struct CommandCenterScreenRegistry {
         case .whatsappNativeYAMLDebug:
             WhatsAppNativeYAMLDebugPlaceholderScreen()
         case .whatsappLogs:
-            WhatsAppLogsPlaceholderScreen()
+            WhatsAppLogsScreen(logStore: whatsAppCrawlingLogStore)
         case .tools:
             MCPToolsPlaceholderScreen()
         case .aiConnection:

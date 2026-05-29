@@ -18,6 +18,7 @@ final class WebViewWhatsAppCrawlingService: ObservableObject, WhatsAppCrawlingSe
     @Published private(set) var presentationMode: WebViewPresentationMode = .embedded
     let activeIntegration: WhatsAppCrawlingActiveIntegration = .webView
     @Published private(set) var webView: WKWebView?
+    var statusText: String? { nil }
 
     var integration: (any WhatsAppCrawlingIntegration)? {
         // TODO: Expose WebViewWhatsAppIntegration once JavaScriptExecutor,

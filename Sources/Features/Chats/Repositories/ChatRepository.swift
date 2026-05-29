@@ -1,13 +1,14 @@
 import Foundation
 
 protocol ChatRepository {
-    func fetchChat(id: String) async throws -> Chat?
+    func getChat(id: String) async throws -> Chat?
     func listChats() async throws -> [Chat]
-    func saveChat(_ chat: Chat) async throws
+    func upsertChat(_ chat: Chat) async throws
     func deleteChat(id: String) async throws
 
-    func fetchMessage(id: String) async throws -> ChatMessage?
-    func listMessages(chatId: String) async throws -> [ChatMessage]
-    func saveMessage(_ message: ChatMessage) async throws
+    func listMessages(chatId: String, limit: Int?) async throws -> [ChatMessage]
+    func insertMessages(_ messages: [ChatMessage]) async throws
+    func markMessagesHandled(ids: [String]) async throws
+    func existingMessageIds(chatId: String) async throws -> Set<String>
     func deleteMessage(id: String) async throws
 }

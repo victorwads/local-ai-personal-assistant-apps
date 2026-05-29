@@ -214,7 +214,10 @@ enum WebViewJavaScripts {
     if (!children || typeof children !== "object") return {};
     const result = {};
     for (const key of Object.keys(children)) {
-      result[key] = extractNode(children[key], context);
+      const extracted = extractNode(children[key], context);
+      if (extracted !== null && extracted !== undefined) {
+        result[key] = extracted;
+      }
     }
     return result;
   }
@@ -284,7 +287,10 @@ enum WebViewJavaScripts {
 
       if (spec.web && typeof spec.web === "object") {
         for (const key of Object.keys(spec.web)) {
-          result.web[key] = extractNode(spec.web[key], document);
+          const extracted = extractNode(spec.web[key], document);
+          if (extracted !== null && extracted !== undefined) {
+            result.web[key] = extracted;
+          }
         }
       }
 

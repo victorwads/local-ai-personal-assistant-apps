@@ -5,6 +5,7 @@ final class NativeWhatsAppCrawlingService: WhatsAppCrawlingService {
     private let settings: WhatsAppNativeSettingsWrapper
 
     private(set) var state: WhatsAppCrawlingServiceState = .stopped
+    var statusText: String? { nil }
     let activeIntegration: WhatsAppCrawlingActiveIntegration = .nativeAccessibility
 
     var integration: (any WhatsAppCrawlingIntegration)? {
