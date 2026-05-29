@@ -22,6 +22,9 @@ targets:
     platform: macOS
     sources:
       - path: Sources
+      - path: Docs
+      - path: Scripts
+      - path: project.yml
       - path: Resources
         buildPhase: resources
     dependencies:
