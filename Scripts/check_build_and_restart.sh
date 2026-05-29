@@ -17,9 +17,8 @@ if (( ${#icon_pngs} == 0 )); then
   "$ROOT_DIR/scripts/regenerate_app_icon.sh"
 fi
 
-echo "==> Running architecture rules"
-git checkout "$ROOT_DIR/scripts/check_architecture_rules.sh"
-bash "$ROOT_DIR/scripts/check_architecture_rules.sh"
+echo "==> Running linters"
+bash "$ROOT_DIR/scripts/lint.sh"
 
 cd "$ROOT_DIR"
 echo "==> Generating Xcode project"

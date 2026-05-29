@@ -180,6 +180,10 @@ The architecture now separates these conceptual concerns:
 - observability
 
 That separation is important because the assistant now needs to behave differently depending on whether it is reasoning, speaking, replying, or only rendering a human-friendly message.
+
+## Firebase boundary
+
+Firebase SDK imports and SDK types are isolated under `Sources/Infrastructure`. Feature code uses infrastructure repositories/services instead of importing Firebase modules or exposing Firebase SDK types directly. Generic Firestore-backed persistence is provided by `FirestoreRepository`, while feature repositories stay thin and keep Firebase details behind Infrastructure abstractions.
 ## Future shape
 
 Likely next steps in the architecture are:

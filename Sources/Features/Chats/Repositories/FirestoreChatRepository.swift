@@ -1,24 +1,27 @@
-import FirebaseFirestore
 import Foundation
 
+private enum ChatMessageField {
+    static let chatId = "chatId"
+    static let dateTime = "dateTime"
+    static let handled = "handled"
+}
+
 final class FirestoreChatRepository: ChatRepository {
-    private final class ChatStore: FirebaseRepository<Chat> {
-        init(scope: FirebaseProfileScope, firestore: Firestore) {
+    private final class ChatStore: FirestoreRepository<Chat> {
+        init(scope: FirebaseProfileScope) {
             super.init(
                 entityName: "Chat",
                 path: .profileScoped(scope: scope, collection: "Chats"),
-                firestore: firestore,
                 readSource: .cacheOnly
             )
         }
     }
 
-    private final class MessageStore: FirebaseRepository<ChatMessage> {
-        init(scope: FirebaseProfileScope, firestore: Firestore) {
+    private final class MessageStore: FirestoreRepository<ChatMessage> {
+        init(scope: FirebaseProfileScope) {
             super.init(
                 entityName: "ChatMessage",
                 path: .profileScoped(scope: scope, collection: "ChatMessages"),
-                firestore: firestore,
                 readSource: .cacheOnly
             )
         }
@@ -27,9 +30,9 @@ final class FirestoreChatRepository: ChatRepository {
     private let chatStore: ChatStore
     private let messageStore: MessageStore
 
-    init(scope: FirebaseProfileScope, firestore: Firestore = .firestore()) {
-        self.chatStore = ChatStore(scope: scope, firestore: firestore)
-        self.messageStore = MessageStore(scope: scope, firestore: firestore)
+    init(scope: FirebaseProfileScope) {
+        self.chatStore = ChatStore(scope: scope)
+        self.messageStore = MessageStore(scope: scope)
     }
 
     func getChat(id: String) async throws -> Chat? {
@@ -48,29 +51,55 @@ final class FirestoreChatRepository: ChatRepository {
         try await chatStore.delete(id)
     }
 
-    func getMessage(id: String) async throws -> ChatMessage? {
-        try await messageStore.getById(id)
+    func listMessages(chatId: String, limit: Int? = nil) async throws -> [ChatMessage] {
+        let effectiveLimit = max(1, limit ?? 10)
+        let messages = try await messageStore.query(
+            matching: [ChatMessageField.chatId: chatId],
+            sortedBy: [
+                FirestoreRepositorySort(field: "_createdAt", descending: true),
+                FirestoreRepositorySort(field: ChatMessageField.dateTime, descending: true)
+            ],
+            limit: effectiveLimit
+        )
+        return Array(messages.reversed())
     }
 
-    func listMessages(chatId: String) async throws -> [ChatMessage] {
-        let all = try await messageStore.getAll(includeDeleted: false)
-        return all.filter { $0.chatId == chatId }
+    func insertMessages(_ messages: [ChatMessage]) async throws {
+        guard !messages.isEmpty else {
+            return
+        }
+
+        let chatIds = Set(messages.map(\.chatId))
+        var existingIds = Set<String>()
+        for chatId in chatIds {
+            existingIds.formUnion(try await existingMessageIds(chatId: chatId))
+        }
+
+        let newMessages = messages.filter { message in
+            guard let id = message.id else {
+                return true
+            }
+            return !existingIds.contains(id)
+        }
+
+        try await messageStore.saveAll(newMessages)
     }
 
-    func upsertMessage(_ message: ChatMessage) async throws {
-        _ = try await messageStore.save(message, merge: true)
-    }
-
-    func upsertMessages(_ messages: [ChatMessage]) async throws {
-        try await messageStore.saveAll(messages)
+    func markMessagesHandled(ids: [String]) async throws {
+        try await messageStore.updateAll(
+            ids: ids,
+            data: [ChatMessageField.handled: true]
+        )
     }
 
     func existingMessageIds(chatId: String) async throws -> Set<String> {
-        let messages = try await listMessages(chatId: chatId)
-        return Set(messages.compactMap(\.id))
+        try await messageStore.existingIds(
+            matching: [ChatMessageField.chatId: chatId]
+        )
     }
 
     func deleteMessage(id: String) async throws {
         try await messageStore.delete(id)
     }
+
 }

@@ -69,7 +69,7 @@ final class ProfilesHomeViewModel: ObservableObject {
                     return
                 }
 
-                if let existing = try await repository.getProfile(id: profileId), existing.deletedAt == nil {
+                if try await repository.getProfile(id: profileId) != nil {
                     if requestedProfileId == nil {
                         profileCreationConflictId = profileId
                     } else {

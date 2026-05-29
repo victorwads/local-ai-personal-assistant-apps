@@ -1,12 +1,10 @@
 import Foundation
-import FirebaseFirestore
 
-public final class FirestoreProfileRepository: FirebaseRepository<Profile>, ProfileRepository {
-    public init(firestore: Firestore = .firestore()) {
+public final class FirestoreProfileRepository: FirestoreRepository<Profile>, ProfileRepository {
+    public init() {
         super.init(
             entityName: "Profile",
-            path: .root(collection: "AccountProfiles"),
-            firestore: firestore
+            path: .root(collection: "AccountProfiles")
         )
     }
 

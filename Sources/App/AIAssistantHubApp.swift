@@ -1,5 +1,4 @@
 import SwiftUI
-import FirebaseCore
 
 @main
 struct AIAssistantHubApp: App {
@@ -9,7 +8,7 @@ struct AIAssistantHubApp: App {
     @StateObject private var appModel: AppModel
 
     init() {
-        FirebaseApp.configure()
+        FirebaseAppConfigurator.configure()
 
         let authController = AuthStateController(repository: FirebaseAuthRepository())
         let trayIconController = TrayIconController()

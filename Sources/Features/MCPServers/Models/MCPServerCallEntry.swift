@@ -2,7 +2,6 @@ import Foundation
 
 struct MCPServerCallEntry: Codable, Equatable, Sendable, Identifiable {
     let id: String
-    let createdAt: Date
     let method: String?
     let path: String?
     let requestHeaders: [String: String]

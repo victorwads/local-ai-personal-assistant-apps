@@ -44,22 +44,40 @@ enum WhatsAppCrawlingNormalizer {
         return parseAuthor(fromDateTimeAndAuthor: messageDateTimeAndAuthor)
     }
 
-    static func parseDateTime(fromMessageDateTimeAndAuthor raw: String?) -> Date? {
-        guard let raw = normalizeText(raw) else { return nil }
-        guard let open = raw.firstIndex(of: "["), let close = raw.firstIndex(of: "]"), open < close else { return nil }
-        let content = String(raw[raw.index(after: open)..<close]).trimmingCharacters(in: .whitespaces)
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "HH:mm, dd/MM/yyyy"
-        return formatter.date(from: content)
+    static func normalizeMessageDateTime(
+        messageDateTimeAndAuthor: String?,
+        messageTime: String?,
+        referenceDate: Date
+    ) -> Date? {
+        if let fullDateTime = parseDateTime(fromMessageDateTimeAndAuthor: messageDateTimeAndAuthor) {
+            return fullDateTime
+        }
+
+        guard let timeText = normalizeText(messageTime) else { return nil }
+        let components = timeText.split(separator: ":")
+        guard components.count == 2 else { return nil }
+        guard
+            let hour = Int(components[0]), (0...23).contains(hour),
+            let minute = Int(components[1]), (0...59).contains(minute)
+        else {
+            return nil
+        }
+
+        var calendar = Calendar.current
+        calendar.timeZone = .current
+        var dayComponents = calendar.dateComponents([.year, .month, .day], from: referenceDate)
+        dayComponents.hour = hour
+        dayComponents.minute = minute
+        dayComponents.second = 0
+        return calendar.date(from: dayComponents)
     }
 
     static func detectMessageKind(rawMessage: [String: Any]) -> ChatMessage.Kind {
-        if WebViewInteractiveElementDetector.from(rawMessage["sticker"] as Any) != nil {
-            return .sticker
-        }
         if WebViewInteractiveElementDetector.from(rawMessage["image"] as Any) != nil {
             return .image
+        }
+        if WebViewInteractiveElementDetector.from(rawMessage["sticker"] as Any) != nil {
+            return .sticker
         }
         if let isAudio = rawMessage["isAudio"] as? Bool, isAudio {
             return .audio
@@ -77,6 +95,16 @@ enum WhatsAppCrawlingNormalizer {
         guard let colon = remainder.lastIndex(of: ":") else { return nil }
         let author = remainder[..<colon].trimmingCharacters(in: .whitespaces)
         return author.isEmpty ? nil : String(author)
+    }
+
+    private static func parseDateTime(fromMessageDateTimeAndAuthor raw: String?) -> Date? {
+        guard let raw = normalizeText(raw) else { return nil }
+        guard let open = raw.firstIndex(of: "["), let close = raw.firstIndex(of: "]"), open < close else { return nil }
+        let content = String(raw[raw.index(after: open)..<close]).trimmingCharacters(in: .whitespaces)
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "HH:mm, dd/MM/yyyy"
+        return formatter.date(from: content)
     }
 
     private static func stableHash(_ text: String) -> String {

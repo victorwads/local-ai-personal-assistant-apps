@@ -4,10 +4,13 @@ This document owns Firebase repository boundaries and persistence metadata rules
 
 ## Responsibility boundaries
 
-- `FirebaseRepository` owns Firestore serialization/deserialization details.
+- `FirestoreRepository` owns Firestore serialization/deserialization details.
+- Firebase SDK imports are allowed only under `Sources/Infrastructure`.
+- Feature code must use infrastructure repositories/services and must not import Firebase SDK modules directly.
 - Domain models must stay clean and focused on domain/application behavior.
 - Domain models must not embed Firebase audit metadata or Firestore transport details by default.
-- Feature repositories should stay thin wrappers over `FirebaseRepository`.
+- Feature repositories should stay thin wrappers over `FirestoreRepository`.
+- Feature repositories should not expose Firebase SDK types in their stored properties, initializers, method signatures, or protocol contracts.
 
 ## Metadata injection
 
@@ -39,3 +42,4 @@ Feature repositories should usually define only:
 - read source
 
 They should not duplicate generic timestamp, serialization, cache, or Firestore write behavior.
+They should depend on Infrastructure-owned abstractions such as `FirestoreRepository` rather than `Firestore`, `DocumentReference`, `QuerySnapshot`, `FieldValue`, or other Firebase SDK types.

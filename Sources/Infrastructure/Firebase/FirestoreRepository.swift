@@ -1,31 +1,41 @@
 import Foundation
 import FirebaseFirestore
 
-public enum FirebaseRepositoryReadSource: Equatable {
+public enum FirestoreRepositoryReadSource: Equatable {
     case `default`
     case cacheOnly
 }
 
-enum FirebaseRepositoryMetadataField {
+enum FirestoreRepositoryMetadataField {
     static let createdAt = "_createdAt"
     static let updatedAt = "_updatedAt"
     static let deletedAt = "_deletedAt"
 }
 
-open class FirebaseRepository<Model: PersistableModel> {
+public struct FirestoreRepositorySort: Sendable {
+    let field: String
+    let descending: Bool
+
+    public init(field: String, descending: Bool = false) {
+        self.field = field
+        self.descending = descending
+    }
+}
+
+open class FirestoreRepository<Model: PersistableModel> {
     public let entityName: String
-    public let path: FirebaseRepositoryPath
-    public let collection: CollectionReference
+    public let path: FirestoreRepositoryPath
+    private let collection: CollectionReference
 
     private let firestore: Firestore
     private let dateProvider: () -> Date
-    private let readSource: FirebaseRepositoryReadSource
+    private let readSource: FirestoreRepositoryReadSource
 
     public init(
         entityName: String,
-        path: FirebaseRepositoryPath,
+        path: FirestoreRepositoryPath,
         firestore: Firestore = .firestore(),
-        readSource: FirebaseRepositoryReadSource = .cacheOnly,
+        readSource: FirestoreRepositoryReadSource = .cacheOnly,
         dateProvider: @escaping () -> Date = Date.init
     ) {
         self.entityName = entityName
@@ -37,12 +47,35 @@ open class FirebaseRepository<Model: PersistableModel> {
     }
 
     open func getAll(includeDeleted: Bool = false) async throws -> [Model] {
+        try await query(includeDeleted: includeDeleted)
+    }
+
+    open func query(
+        matching filters: [String: Any]? = nil,
+        sortedBy sortDescriptors: [FirestoreRepositorySort] = [],
+        limit: Int? = nil,
+        includeDeleted: Bool = false
+    ) async throws -> [Model] {
+        var query: Query = collection
+
+        for (field, value) in filters ?? [:] {
+            query = query.whereField(field, isEqualTo: value)
+        }
+
+        for sortDescriptor in sortDescriptors {
+            query = query.order(by: sortDescriptor.field, descending: sortDescriptor.descending)
+        }
+
+        if let limit {
+            query = query.limit(to: limit)
+        }
+
         let snapshot: QuerySnapshot
         switch readSource {
         case .default:
-            snapshot = try await collection.getDocuments()
+            snapshot = try await query.getDocuments()
         case .cacheOnly:
-            snapshot = try await collection.getDocuments(source: .cache)
+            snapshot = try await query.getDocuments(source: .cache)
         }
 
         let records = try snapshot.documents.map { document in
@@ -53,6 +86,22 @@ open class FirebaseRepository<Model: PersistableModel> {
             return records.map(\.model)
         }
         return records.filter { !$0.isDeleted }.map(\.model)
+    }
+
+    open func existingIds(matching filters: [String: Any]) async throws -> Set<String> {
+        var query: Query = collection
+        for (field, value) in filters {
+            query = query.whereField(field, isEqualTo: value)
+        }
+
+        let snapshot: QuerySnapshot
+        switch readSource {
+        case .default:
+            snapshot = try await query.getDocuments()
+        case .cacheOnly:
+            snapshot = try await query.getDocuments(source: .cache)
+        }
+        return Set(snapshot.documents.map(\.documentID))
     }
 
     open func getById(_ id: String) async throws -> Model? {
@@ -161,8 +210,8 @@ open class FirebaseRepository<Model: PersistableModel> {
         if soft {
             let now = dateProvider()
             try await reference.updateData([
-                FirebaseRepositoryMetadataField.deletedAt: now,
-                FirebaseRepositoryMetadataField.updatedAt: now
+                FirestoreRepositoryMetadataField.deletedAt: now,
+                FirestoreRepositoryMetadataField.updatedAt: now
             ])
         } else {
             try await reference.delete()
@@ -235,23 +284,23 @@ open class FirebaseRepository<Model: PersistableModel> {
         payload = removeNilFields(from: payload)
 
         if isCreating {
-            payload[FirebaseRepositoryMetadataField.createdAt] = now
-            payload[FirebaseRepositoryMetadataField.updatedAt] = now
-            payload.removeValue(forKey: FirebaseRepositoryMetadataField.deletedAt)
+            payload[FirestoreRepositoryMetadataField.createdAt] = now
+            payload[FirestoreRepositoryMetadataField.updatedAt] = now
+            payload.removeValue(forKey: FirestoreRepositoryMetadataField.deletedAt)
             return payload
         }
 
-        payload.removeValue(forKey: FirebaseRepositoryMetadataField.createdAt)
-        payload[FirebaseRepositoryMetadataField.updatedAt] = now
-        payload.removeValue(forKey: FirebaseRepositoryMetadataField.deletedAt)
+        payload.removeValue(forKey: FirestoreRepositoryMetadataField.createdAt)
+        payload[FirestoreRepositoryMetadataField.updatedAt] = now
+        payload.removeValue(forKey: FirestoreRepositoryMetadataField.deletedAt)
         return payload
     }
 
     private func makeUpdatePayload(from data: [String: Any]) -> [String: Any] {
         var payload = removeNilFields(from: data)
-        payload.removeValue(forKey: FirebaseRepositoryMetadataField.createdAt)
-        payload[FirebaseRepositoryMetadataField.updatedAt] = dateProvider()
-        payload.removeValue(forKey: FirebaseRepositoryMetadataField.deletedAt)
+        payload.removeValue(forKey: FirestoreRepositoryMetadataField.createdAt)
+        payload[FirestoreRepositoryMetadataField.updatedAt] = dateProvider()
+        payload.removeValue(forKey: FirestoreRepositoryMetadataField.deletedAt)
         return payload
     }
 
@@ -282,7 +331,7 @@ open class FirebaseRepository<Model: PersistableModel> {
     }
 
     private func isDeleted(from data: [String: Any]) -> Bool {
-        guard let value = data[FirebaseRepositoryMetadataField.deletedAt] else {
+        guard let value = data[FirestoreRepositoryMetadataField.deletedAt] else {
             return false
         }
 

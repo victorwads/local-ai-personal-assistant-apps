@@ -1,6 +1,6 @@
 import Foundation
 
-public enum FirebaseRepositoryPath: Equatable, Sendable {
+public enum FirestoreRepositoryPath: Equatable, Sendable {
     case root(collection: String)
     case profileScoped(scope: FirebaseProfileScope, collection: String)
 

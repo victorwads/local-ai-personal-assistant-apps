@@ -8,9 +8,6 @@ struct Issue: PersistableModel, Equatable, Sendable {
     var priority: Int?
     var resolutionCondition: String?
     var status: IssueStatus
-    var createdAt: Date
-    var updatedAt: Date
-    var deletedAt: Date?
 }
 
 enum IssueStatus: String, Codable, Equatable, Sendable {

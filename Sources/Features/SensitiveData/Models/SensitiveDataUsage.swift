@@ -7,7 +7,4 @@ struct SensitiveDataUsage: PersistableModel, Equatable, Sendable {
     var chatId: String?
     var reason: String?
     var usedAt: Date
-    var createdAt: Date
-    var updatedAt: Date
-    var deletedAt: Date?
 }

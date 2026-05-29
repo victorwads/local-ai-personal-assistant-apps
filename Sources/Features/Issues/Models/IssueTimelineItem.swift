@@ -5,7 +5,4 @@ struct IssueTimelineItem: PersistableModel, Equatable, Sendable {
     var issueId: String
     var kind: String?
     var summary: String?
-    var createdAt: Date
-    var updatedAt: Date
-    var deletedAt: Date?
 }

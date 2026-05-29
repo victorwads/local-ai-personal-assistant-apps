@@ -6,7 +6,4 @@ struct SensitiveDataItem: PersistableModel, Equatable, Sendable {
     var kind: SensitiveDataKind
     var value: String?
     var issueId: String?
-    var createdAt: Date
-    var updatedAt: Date
-    var deletedAt: Date?
 }
