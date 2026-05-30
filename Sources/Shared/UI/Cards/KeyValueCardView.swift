@@ -25,28 +25,13 @@ struct KeyValueCardView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            if let title {
-                Text(title)
-                    .font(.headline)
-            }
-
+        DSCard(title: title) {
             VStack(alignment: .leading, spacing: 10) {
                 ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                     rowView(row)
                 }
             }
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(.background)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(.quaternary, lineWidth: 1)
-        )
     }
 
     private func rowView(_ row: KeyValueCardRow) -> some View {

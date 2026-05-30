@@ -3,58 +3,218 @@ import SwiftUI
 struct SharedUIPreviews: View {
     var body: some View {
         ScrollView {
-            previewSections
-        }
-        .safeAreaInset(edge: .bottom) {
-            Color.clear.frame(height: 24)
-        }
-    }
-
-    private var previewSections: some View {
-        VStack(alignment: .leading, spacing: 28) {
-            featureScreenContainerPreview
-            emptyStatePreview
-            keyValueCardPreview
-        }
-        .padding(24)
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var featureScreenContainerPreview: some View {
-        previewSection("FeatureScreenContainer") {
-            FeatureScreenContainer(
-                title: "FeatureScreenContainer Title",
-                subtitle: "Optional subtitle text gives context for the feature screen."
-            ) {
-                KeyValueCardView(
-                    title: "Content Closure Example",
-                    rows: [
-                        KeyValueCardRow("Content Row", "Rendered inside the container"),
-                        KeyValueCardRow("Layout", "Top-leading with shared padding")
-                    ]
-                )
+            VStack(alignment: .leading, spacing: 32) {
+                headerPreview
+                buttonsPreview
+                badgesPreview
+                titledSectionsPreview
+                cardsPreview
+                messageBubblesPreview
+                listRowsPreview
+                codeBlocksPreview
+                statesPreview
             }
-            .frame(height: 260)
-            .previewFrame()
+            .padding(24)
+            .frame(maxWidth: 900, alignment: .leading)
         }
     }
 
-    private var emptyStatePreview: some View {
-        previewSection("EmptyStateView") {
-            EmptyStateView(
-                title: "EmptyStateView Title",
-                message: "Message text explains what is missing and what can happen next.",
-                systemImage: "tray",
-                actionTitle: "Action Title",
-                action: {}
-            )
-            .previewFrame()
+    private var headerPreview: some View {
+        previewSection("Headers") {
+            DSFeatureHeader(
+                title: "Memories",
+                subtitle: "Permanent assistant context saved for this profile.",
+                systemImage: "brain.head.profile"
+            ) {
+                DSRefreshButton(action: {})
+            }
+            .previewBounds()
         }
     }
 
-    private var keyValueCardPreview: some View {
-        previewSection("KeyValueCardView") {
+    private var buttonsPreview: some View {
+        previewSection("Buttons") {
+            HStack(spacing: 12) {
+                DSRefreshButton(action: {})
+                DSRefreshButton(isLoading: true, action: {})
+            }
+            .previewBounds()
+        }
+    }
+
+    private var badgesPreview: some View {
+        previewSection("Badges") {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 8) {
+                    DSBadge("Neutral")
+                    DSBadge("Info", systemImage: "info.circle", style: .info)
+                    DSBadge("Success", systemImage: "checkmark.circle", style: .success)
+                    DSBadge("Warning", systemImage: "exclamationmark.triangle", style: .warning)
+                    DSBadge("Danger", systemImage: "xmark.octagon", style: .danger)
+                }
+
+                DSBadge("Status", secondaryText: "Waiting", systemImage: "clock", style: .neutral)
+            }
+            .previewBounds()
+        }
+    }
+
+    private var titledSectionsPreview: some View {
+        previewSection("Titled Sections") {
+            DSTitledSection(
+                title: "Execution Result",
+                subtitle: "Titles stay outside the content bubble for section-level context.",
+                systemImage: "terminal",
+                prominence: .emphasized
+            ) {
+                Button("Retry") {}
+                    .buttonStyle(.bordered)
+            } content: {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Use titled sections for settings groups, metadata panes, and other reusable content blocks.")
+                        .foregroundStyle(.secondary)
+
+                    DSCodeBlock(
+                        """
+                        {
+                          "status": "ok",
+                          "duration_ms": 142
+                        }
+                        """
+                    )
+                    .frame(height: 84)
+                }
+            }
+            .previewBounds()
+        }
+    }
+
+    private var cardsPreview: some View {
+        previewSection("Cards") {
             VStack(alignment: .leading, spacing: 12) {
+                DSCard(title: "Normal Card") {
+                    Text("Reusable section cards keep feature screens visually consistent.")
+                        .foregroundStyle(.secondary)
+                }
+
+                DSCard(
+                    title: "Emphasized Card",
+                    systemImage: "hammer",
+                    prominence: .emphasized
+                ) {
+                    Text("Use emphasized cards sparingly for primary metadata or screen-level context.")
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .previewBounds()
+        }
+    }
+
+    private var messageBubblesPreview: some View {
+        previewSection("Message Bubbles") {
+            VStack(alignment: .leading, spacing: 12) {
+                DSMessageBubbleRow(
+                    alignment: .leading,
+                    title: "Client",
+                    subtitle: "10:42 AM"
+                ) {
+                    Text("Could you send the latest issue summary when you get a chance?")
+                } footer: {
+                    Text("Received")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+
+                DSMessageBubbleRow(
+                    alignment: .trailing,
+                    title: "Assistant",
+                    subtitle: "10:43 AM"
+                ) {
+                    Text("Absolutely. I can send the summary and flag anything still blocked.")
+                        .foregroundStyle(.white)
+                } footer: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "checkmark.circle.fill")
+                        Text("Sent")
+                    }
+                    .font(.caption2)
+                    .foregroundStyle(.white.opacity(0.82))
+                }
+
+                DSMessageBubbleRow(
+                    alignment: .leading,
+                    title: "Client Voice",
+                    subtitle: "Input controls also fit here"
+                ) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("This row supports arbitrary content, not just plain text.")
+                        Toggle("Include transcript", isOn: .constant(true))
+                    }
+                }
+            }
+            .previewBounds()
+        }
+    }
+
+    private var listRowsPreview: some View {
+        previewSection("List Rows") {
+            DSListCardRow(
+                title: "Unread client message",
+                subtitle: "Needs response",
+                description: "A shared list row keeps feature indexes consistent without baking issue or memory-specific logic into Shared/UI.",
+                systemImage: "message"
+            ) {
+                HStack(spacing: 6) {
+                    DSBadge("Urgent", style: .warning)
+                    DSBadge("Open", style: .info)
+                }
+            } trailing: {
+                Button("Open") {}
+                    .buttonStyle(.bordered)
+            }
+            .previewBounds()
+        }
+    }
+
+    private var codeBlocksPreview: some View {
+        previewSection("Code Blocks") {
+            DSCodeBlock(
+                """
+                {
+                  "tool": "list_memories",
+                  "limit": 5
+                }
+                """
+            )
+            .frame(height: 96)
+            .previewBounds()
+        }
+    }
+
+    private var statesPreview: some View {
+        previewSection("States And Containers") {
+            VStack(alignment: .leading, spacing: 12) {
+                FeatureScreenContainer(
+                    title: "FeatureScreenContainer Title",
+                    subtitle: "Optional subtitle text gives context for the feature screen."
+                ) {
+                    KeyValueCardView(
+                        title: "Content Closure Example",
+                        rows: [
+                            KeyValueCardRow("Content Row", "Rendered inside the container"),
+                            KeyValueCardRow("Layout", "Top-leading with shared padding")
+                        ]
+                    )
+                }
+
+                EmptyStateView(
+                    title: "EmptyStateView Title",
+                    message: "Message text explains what is missing and what can happen next.",
+                    systemImage: "tray",
+                    actionTitle: "Action Title",
+                    action: {}
+                )
+
                 KeyValueCardView(
                     title: "KeyValueCardView Title",
                     rows: [
@@ -69,7 +229,7 @@ struct SharedUIPreviews: View {
                     value: "Single value"
                 )
             }
-            .previewFrame()
+            .previewBounds()
         }
     }
 
@@ -87,18 +247,12 @@ struct SharedUIPreviews: View {
 }
 
 private extension View {
-    func previewFrame() -> some View {
-        frame(maxWidth: 680, alignment: .leading)
-            .background(.regularMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .strokeBorder(.quaternary, lineWidth: 1)
-            )
+    func previewBounds() -> some View {
+        frame(maxWidth: 760, alignment: .leading)
     }
 }
 
 #Preview("Shared UI") {
     SharedUIPreviews()
-        .frame(width: 760, height: 620)
+        .frame(width: 920, height: 1120)
 }

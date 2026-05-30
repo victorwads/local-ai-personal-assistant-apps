@@ -4,20 +4,15 @@ import SwiftUI
 struct AIAssistantHubApp: App {
     @NSApplicationDelegateAdaptor(AppLifecycleController.self) private var lifecycleController
 
-    @StateObject private var authController: AuthStateController
-    @StateObject private var appModel: AppModel
+    private var runtime: AIAssistantHubRuntime?
 
     init() {
-        FirebaseAppConfigurator.configure()
+        if RuntimeEnvironment.isXcodePreview {
+            runtime = nil
+            return
+        }
 
-        let authController = AuthStateController(repository: FirebaseAuthRepository())
-        let trayIconController = TrayIconController()
-        let appModel = AppModel(authController: authController, trayIconController: trayIconController)
-
-        _authController = StateObject(wrappedValue: authController)
-        _appModel = StateObject(wrappedValue: appModel)
-
-        lifecycleController.configure(authController: authController, appModel: appModel)
+        runtime = AIAssistantHubRuntime(lifecycleController: lifecycleController)
     }
 
     var body: some Scene {
