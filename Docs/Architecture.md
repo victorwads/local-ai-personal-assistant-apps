@@ -20,6 +20,14 @@ This project uses XcodeGen. Treat `AIAssistantHub.xcodeproj` as generated build 
 - Make project configuration changes in `project.yml`, source files, scripts, or resources.
 - For validation, run the repo's check/build/restart script (currently `scripts/check_build_and_restart.sh`). Do not run `xcodebuild` manually.
 
+## Shared UI design system
+
+Reusable app UI belongs in [Sources/Shared/UI/Architecture.md](../Sources/Shared/UI/Architecture.md).
+
+Feature screens should use the existing Shared UI primitives for repeated visual patterns such as feature headers, refresh buttons, cards, titled sections, badges, code blocks, list rows, message bubbles, and empty states.
+
+Do not create one-off local visual components when a Shared UI component already fits. If a screen exposes a recurring visual pattern that is not covered yet, add a small, well-named Shared UI component first, document its purpose, and add a realistic example to the Shared UI preview catalog.
+
 ## Current status (rewrite scaffold)
 
 - MCP tool instances live under `Sources/Features/**/MCP/`, and `Sources/Features/MCPServers/Registry/MCPToolRegistry.swift` stores them by name.

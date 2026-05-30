@@ -37,40 +37,23 @@ struct CommandCenterHeaderView: View {
     }
 
     private func statusItemView(_ item: ProfileRuntimeStatusItem) -> some View {
-        HStack(spacing: 8) {
-            Circle()
-                .fill(color(for: item.stateLabel))
-                .frame(width: 7, height: 7)
-
-            Text(item.title)
-                .foregroundStyle(.secondary)
-
-            if let detail = item.detail, !detail.isEmpty {
-                Text("• \(detail)")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-            }
-
-            if let actionTitle = actionTitleToRender(for: item), let action = item.action {
-                Button {
+        let actionTitle = actionTitleToRender(for: item)
+        return DSRuntimeStatusBadge(
+            title: item.title,
+            secondaryText: item.detail,
+            state: DSRuntimeStatusBadge.State(statusLabel: item.stateLabel),
+            trailingSystemImage: actionTitle.map(iconName(for:)),
+            trailingActionLabel: actionTitle.map { "\($0) \(item.title)" },
+            trailingAction: actionTitle.flatMap { _ in
+                guard let action = item.action else { return nil }
+                return {
                     Task { @MainActor in
                         await action()
                         refreshID = UUID()
                     }
-                } label: {
-                    Image(systemName: iconName(for: actionTitle))
                 }
-                .buttonStyle(.plain)
-                .controlSize(.mini)
-                .help("\(actionTitle) \(item.title)")
             }
-        }
-        .font(.caption)
-        .padding(.horizontal, 9)
-        .padding(.vertical, 5)
-        .background(.quaternary, in: Capsule())
+        )
     }
 
     private func actionTitleToRender(for item: ProfileRuntimeStatusItem) -> String? {
@@ -90,21 +73,6 @@ struct CommandCenterHeaderView: View {
             return "stop.fill"
         default:
             return "questionmark"
-        }
-    }
-
-    private func color(for stateLabel: String) -> Color {
-        switch stateLabel.lowercased() {
-        case "running":
-            return .green
-        case "starting", "stopping":
-            return .orange
-        case "failed":
-            return .red
-        case "stopped":
-            return .secondary
-        default:
-            return .secondary
         }
     }
 }

@@ -29,18 +29,11 @@ struct FeatureScreenContainer<Content: View>: View {
 
     @ViewBuilder
     private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if let title {
-                Text(title)
-                    .font(.largeTitle.weight(.semibold))
-            }
-
-            if let subtitle {
-                Text(subtitle)
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+        if let title {
+            DSFeatureHeader(
+                title: title,
+                subtitle: subtitle
+            )
         }
     }
 }

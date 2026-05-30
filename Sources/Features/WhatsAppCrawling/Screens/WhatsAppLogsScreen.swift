@@ -23,10 +23,7 @@ private struct WhatsAppLogsContent: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("WhatsApp Logs")
-                    .font(.title2.weight(.semibold))
-                Spacer()
+            DSFeatureHeader(title: "WhatsApp Logs") {
                 Toggle("Auto-scroll", isOn: $autoScroll)
                     .toggleStyle(.switch)
                     .controlSize(.small)

@@ -6,8 +6,7 @@ struct SettingsScreen: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                Text("Settings")
-                    .font(.largeTitle.weight(.semibold))
+                DSFeatureHeader(title: "Settings")
 
                 if let settingsSectionRegistry {
                     let sections = settingsSectionRegistry.sections
@@ -16,21 +15,9 @@ struct SettingsScreen: View {
                         emptyState(message: "No settings sections registered for this profile.")
                     } else {
                         ForEach(sections) { section in
-                            VStack(alignment: .leading, spacing: 10) {
-                                Text(section.title)
-                                    .font(.title2.weight(.semibold))
-
+                            DSTitledSection(title: section.title) {
                                 section.makeView()
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(20)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                            .fill(.background)
-                                    )
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                            .strokeBorder(.quaternary, lineWidth: 1)
-                                    )
                             }
                         }
                     }

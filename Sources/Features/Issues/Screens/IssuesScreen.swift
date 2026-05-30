@@ -8,17 +8,15 @@ struct IssuesScreen: View {
     @State private var errorMessage: String?
 
     var body: some View {
-        FeatureScreenContainer(
-            title: "Issues",
-            subtitle: "Active operational issues for this profile."
-        ) {
+        FeatureScreenContainer {
             VStack(alignment: .leading, spacing: 16) {
-                HStack {
-                    Spacer()
-                    Button("Refresh") {
+                DSFeatureHeader(
+                    title: "Issues",
+                    subtitle: "Active operational issues for this profile."
+                ) {
+                    DSRefreshButton(isLoading: isLoading) {
                         Task { await loadIssues() }
                     }
-                    .disabled(isLoading)
                 }
 
                 if isLoading {
@@ -57,46 +55,63 @@ struct IssuesScreen: View {
     }
 
     private func issueCard(_ issue: Issue) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .top) {
-                Text(issue.title)
-                    .font(.headline)
+        DSListCardRow(
+            title: issue.title,
+            description: issue.description
+        ) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    DSBadge(
+                        "Status",
+                        secondaryText: issue.status.rawValue,
+                        style: badgeStyle(for: issue.status)
+                    )
 
-                Spacer()
-
-                Button("Open") {
-                    // TODO: Open issue details screen.
+                    DSBadge(
+                        "Priority",
+                        secondaryText: String(issue.priority.rawValue),
+                        style: badgeStyle(for: issue.priority)
+                    )
                 }
-                .buttonStyle(.bordered)
+
+                if let suspendUntil = issue.suspendUntil {
+                    Text("Suspended until: \(suspendUntil.formatted(date: .abbreviated, time: .shortened))")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
-
-            Text(issue.description)
-                .font(.body)
-                .foregroundStyle(.secondary)
-
-            HStack(spacing: 8) {
-                Text("Status: \(issue.status.rawValue)")
-                    .font(.caption)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.gray.opacity(0.15), in: Capsule())
-
-                Text("Priority: \(issue.priority.rawValue)")
-                    .font(.caption)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.gray.opacity(0.15), in: Capsule())
+        } trailing: {
+            Button("Open") {
+                // TODO: Open issue details screen.
             }
-
-            if let suspendUntil = issue.suspendUntil {
-                Text("Suspended until: \(suspendUntil.formatted(date: .abbreviated, time: .shortened))")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
+            .buttonStyle(.bordered)
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(NSColor.controlBackgroundColor), in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    private func badgeStyle(for status: IssueStatus) -> DSBadge.Style {
+        switch status {
+        case .pending:
+            return .info
+        case .suspended:
+            return .warning
+        case .resolved:
+            return .success
+        case .cancelled:
+            return .danger
+        }
+    }
+
+    private func badgeStyle(for priority: IssuePriority) -> DSBadge.Style {
+        switch priority.rawValue {
+        case 1, 2:
+            return .neutral
+        case 3:
+            return .info
+        case 4:
+            return .warning
+        default:
+            return .danger
+        }
     }
 
     @MainActor

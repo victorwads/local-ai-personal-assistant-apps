@@ -8,20 +8,15 @@ struct MemoriesScreen: View {
     @State private var errorMessage: String?
 
     var body: some View {
-        FeatureScreenContainer(
-            title: "Memories",
-            subtitle: "Permanent assistant context saved for this profile."
-        ) {
+        FeatureScreenContainer {
             VStack(alignment: .leading, spacing: 16) {
-                HStack {
-                    Spacer()
-
-                    Button {
+                DSFeatureHeader(
+                    title: "Memories",
+                    subtitle: "Permanent assistant context saved for this profile."
+                ) {
+                    DSRefreshButton(isLoading: isLoading) {
                         loadMemories()
-                    } label: {
-                        Label("Refresh", systemImage: "arrow.clockwise")
                     }
-                    .disabled(isLoading)
                 }
 
                 content

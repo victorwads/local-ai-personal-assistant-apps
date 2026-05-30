@@ -1,6 +1,6 @@
 # Shared UI Architecture
 
-This folder owns the small shared SwiftUI foundation used by feature screens.
+This folder owns the small shared SwiftUI foundation used by feature screens. It is the app's local UI design-system layer for reusable visual primitives.
 
 Keep this layer lightweight:
 
@@ -13,17 +13,22 @@ Keep this layer lightweight:
 Shared UI contains reusable visual primitives used by multiple features.
 Feature screens should not duplicate card, badge, empty state, code block, or master-detail presentation patterns when an equivalent shared primitive already exists.
 Feature-specific views may compose shared UI components, but they must not move feature logic into `Shared/UI`.
+Do not create one-off local visual wrappers when an existing shared component matches the same role.
+If a screen needs a new recurring visual pattern, add it to Shared UI first or document why the pattern is feature-specific.
+New shared components should have a clear `DS*` name, a concise purpose, and a realistic example in `Previews.swift`.
 
 Shared UI must not know feature models, repositories, Firebase, MCP runtime internals, or app services.
 
 Preferred shared components:
 
-- Use `DSFeatureHeader` for feature screen titles with trailing actions.
+- Use `DSFeatureHeader` for feature screen title/subtitle/action headers.
 - Use `DSRefreshButton` for simple refresh actions.
-- Use `DSTitledSection` when a section title should sit outside the content card.
-- Use `DSBadge` for pills, groups, traits, and status metadata.
+- Use `DSCard` or `DSTitledSection` for cards and titled content sections.
+- Use `DSBadge` for generic simple pills, groups, traits, and lightweight metadata.
+- Use `DSRuntimeStatusBadge` for runtime/service status capsules with state dots, secondary status text, and optional start/stop action icons.
+- Use `DSCodeBlock` for JSON, code, schema, payload, and result displays.
+- Use `DSListCardRow` for consistent list-like cards across feature indexes.
 - Use `DSMessageBubbleRow` for chat-like conversation UIs and voice interaction histories.
-- Use `DSListCardRow` for consistent list and card rows across feature indexes.
 
 The current shared primitives are intended for screens such as:
 
@@ -42,6 +47,11 @@ Master-detail guidance:
 - Do not create a generic master-detail abstraction yet.
 - Future Chats screens should prefer `NavigationSplitView` plus `DSMessageBubbleRow`.
 - Future Client Voice screens should reuse `DSMessageBubbleRow`.
+
+Command Center guidance:
+
+- Command Center header service badges should use `DSRuntimeStatusBadge`.
+- Native SwiftUI sidebar/list/menu rows do not need to be replaced by Shared UI components when platform styling already fits.
 
 Preview rule:
 

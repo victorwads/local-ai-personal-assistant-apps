@@ -7,6 +7,7 @@ struct SharedUIPreviews: View {
                 headerPreview
                 buttonsPreview
                 badgesPreview
+                runtimeStatusBadgesPreview
                 titledSectionsPreview
                 cardsPreview
                 messageBubblesPreview
@@ -27,6 +28,39 @@ struct SharedUIPreviews: View {
                 systemImage: "brain.head.profile"
             ) {
                 DSRefreshButton(action: {})
+            }
+            .previewBounds()
+        }
+    }
+
+    private var runtimeStatusBadgesPreview: some View {
+        previewSection("Runtime Status Badges") {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 8) {
+                    DSRuntimeStatusBadge(
+                        title: "MCP Server",
+                        secondaryText: "Port 8080",
+                        state: .running,
+                        trailingSystemImage: "stop.fill",
+                        trailingActionLabel: "Stop MCP Server",
+                        trailingAction: {}
+                    )
+
+                    DSRuntimeStatusBadge(
+                        title: "Crawling",
+                        secondaryText: "Stopped",
+                        state: .stopped,
+                        trailingSystemImage: "play.fill",
+                        trailingActionLabel: "Start Crawling",
+                        trailingAction: {}
+                    )
+                }
+
+                HStack(spacing: 8) {
+                    DSRuntimeStatusBadge(title: "AI Connection", secondaryText: "Starting", state: .starting)
+                    DSRuntimeStatusBadge(title: "WebView", secondaryText: "Failed", state: .failed)
+                    DSRuntimeStatusBadge(title: "Runtime", state: .idle)
+                }
             }
             .previewBounds()
         }

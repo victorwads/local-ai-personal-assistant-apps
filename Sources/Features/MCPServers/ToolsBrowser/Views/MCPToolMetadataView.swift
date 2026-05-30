@@ -53,8 +53,14 @@ struct MCPToolSectionCard<Content: View>: View {
     }
 
     var body: some View {
-        DSCard(title: title, systemImage: systemImage) {
-            content
+        if let title {
+            DSTitledSection(title: title, systemImage: systemImage) {
+                content
+            }
+        } else {
+            DSCard(systemImage: systemImage) {
+                content
+            }
         }
     }
 }
