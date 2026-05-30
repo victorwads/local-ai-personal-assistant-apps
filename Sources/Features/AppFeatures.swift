@@ -12,6 +12,7 @@ final class AppFeatures {
             MemoriesFeature(context: context),
             SensitiveDataFeature(context: context),
             IssuesFeature(context: context),
+            SentMessagesFeature(context: context),
             MCPServersFeature(context: context),
             AIConnectionFeature(context: context),
             WhatsAppCrawlingFeature(context: context),

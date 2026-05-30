@@ -6,6 +6,7 @@ enum CommandCenterRoute: String, CaseIterable, Identifiable, Hashable {
     case memories
     case sensitiveData
     case clientVoice
+    case sentMessages
     case chats
     case whatsappWebView
     case whatsappWebYAMLDebug

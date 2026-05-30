@@ -31,7 +31,8 @@ enum CommandCenterMenuRegistry {
                 CommandCenterMenuItem(title: "Issues", icon: "exclamationmark.circle", route: .issues),
                 CommandCenterMenuItem(title: "Memories", icon: "brain.head.profile", route: .memories),
                 CommandCenterMenuItem(title: "Sensitive Data", icon: "lock.shield", route: .sensitiveData),
-                CommandCenterMenuItem(title: "Client Voice", icon: "waveform", route: .clientVoice)
+                CommandCenterMenuItem(title: "Client Voice", icon: "waveform", route: .clientVoice),
+                CommandCenterMenuItem(title: "Sent Messages", icon: "paperplane", route: .sentMessages)
             ]
         ),
         CommandCenterSection(

@@ -21,6 +21,8 @@ struct CommandCenterScreenRegistry {
             SensitiveDataScreen()
         case .clientVoice:
             ClientVoiceScreen()
+        case .sentMessages:
+            SentMessagesScreen(feature: container.feature(SentMessagesFeature.self))
         case .chats:
             ChatsScreen()
         case .whatsappWebView:
