@@ -28,3 +28,13 @@ This document owns chat/message domain model and repository rules.
 - Chat/message repositories may include feature-specific persistence rules when they are true domain/application semantics.
 - Do not move those rules into shared model-level merge helpers.
 - Generic Firebase timestamp/cache/serialization behavior belongs in infrastructure, not in chat models.
+
+## Screen ownership
+
+- `ChatsScreen` is a read/display surface over persisted chat and message data.
+- `ChatsScreen` uses `NavigationSplitView` with a chat list sidebar and conversation detail pane.
+- Conversation rendering must use Shared UI `DSMessageBubbleRow`.
+- Message bubble content must support text, image, sticker, audio, and unknown states with clear labels/placeholders.
+- `ChatsFeature` owns chat display/tooling dependencies for this domain and creates repositories in feature initialization.
+- `WhatsAppCrawling` owns crawling/parsing/persisting chat data and must remain separate from chat UI concerns.
+- Real send-message behavior and sent-message auditing flows are intentionally out of scope for this screen.

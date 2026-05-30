@@ -30,20 +30,41 @@ open class FirestoreRepository<Model: PersistableModel> {
     private let firestore: Firestore
     private let dateProvider: () -> Date
     private let readSource: FirestoreRepositoryReadSource
+    private let initialCacheWarmupTask: Task<Void, Never>?
 
     public init(
         entityName: String,
         path: FirestoreRepositoryPath,
         firestore: Firestore = .firestore(),
         readSource: FirestoreRepositoryReadSource = .cacheOnly,
+        warmCacheOnInit: Bool = true,
         dateProvider: @escaping () -> Date = Date.init
     ) {
+        let collection = firestore.collection(path.collectionPath)
+
         self.entityName = entityName
         self.path = path
         self.firestore = firestore
-        self.collection = firestore.collection(path.collectionPath)
+        self.collection = collection
         self.dateProvider = dateProvider
         self.readSource = readSource
+
+        if readSource == .cacheOnly && warmCacheOnInit {
+            self.initialCacheWarmupTask = Task(priority: .utility) {
+                do {
+                    _ = try await collection.getDocuments()
+                } catch {
+                    print("Failed to warm Firestore cache for \(entityName): \(error.localizedDescription)")
+                }
+            }
+        } else {
+            self.initialCacheWarmupTask = nil
+        }
+    }
+    
+    private func waitForInitialCacheWarmupIfNeeded() async {
+        guard readSource == .cacheOnly else { return }
+        await initialCacheWarmupTask?.value
     }
 
     open func getAll(includeDeleted: Bool = false) async throws -> [Model] {
@@ -56,6 +77,7 @@ open class FirestoreRepository<Model: PersistableModel> {
         limit: Int? = nil,
         includeDeleted: Bool = false
     ) async throws -> [Model] {
+        await waitForInitialCacheWarmupIfNeeded()
         var query: Query = collection
 
         for (field, value) in filters ?? [:] {
@@ -89,6 +111,7 @@ open class FirestoreRepository<Model: PersistableModel> {
     }
 
     open func existingIds(matching filters: [String: Any]) async throws -> Set<String> {
+        await waitForInitialCacheWarmupIfNeeded()
         var query: Query = collection
         for (field, value) in filters {
             query = query.whereField(field, isEqualTo: value)
@@ -105,6 +128,7 @@ open class FirestoreRepository<Model: PersistableModel> {
     }
 
     open func getById(_ id: String) async throws -> Model? {
+        await waitForInitialCacheWarmupIfNeeded()
         let snapshot: DocumentSnapshot
         do {
             switch readSource {

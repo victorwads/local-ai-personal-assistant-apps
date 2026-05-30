@@ -24,7 +24,7 @@ struct CommandCenterScreenRegistry {
         case .sentMessages:
             SentMessagesScreen(feature: container.feature(SentMessagesFeature.self))
         case .chats:
-            ChatsScreen()
+            ChatsScreen(feature: container.feature(ChatsFeature.self))
         case .whatsappWebView:
             WhatsAppWebViewScreen(feature: container.feature(WhatsAppCrawlingFeature.self))
         case .whatsappWebYAMLDebug:
