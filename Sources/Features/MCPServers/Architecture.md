@@ -22,7 +22,48 @@ The Tools Browser UI lives in `Sources/Features/ToolsBrowser/` and consumes MCP 
 `executeToolCall(_:)` is backed by `Runtime/MCPToolExecutor.swift`, which is the official manual tool execution path.
 Tool definitions are never executed directly from UI/ViewModel code.
 
-The executor owns the centralized execution pipeline and is the insertion point for future guardrails such as schema validation, permissions, and audit logging.
+## Validation pipeline
+
+`MCPToolExecutor` is the only official tool execution path for:
+
+- Tools Browser manual execution
+- future AI Connection tool-calling execution
+- future tests/integration flows that execute tool calls
+
+Execution flow:
+
+1. Resolve tool definition from `MCPToolRegistry`.
+2. Build `MCPToolValidationContext`.
+3. Run all validators from `Validation/` (`MCPToolCallValidator`) before execution (concurrently).
+4. Aggregate all validation failures from all validators.
+5. Sort errors deterministically (validator registration order, then fieldPath, validatorName, message, suggestedAction).
+6. If any validation errors exist, block execution and return all of them together.
+7. If all validators pass, execute the tool definition.
+
+Rules:
+
+- Validators are registered in order, but validation work may run concurrently.
+- Any validation error blocks tool execution.
+- Validation failures are aggregated and returned together (no short-circuit on first error).
+- Validation errors retain debug metadata (`toolName`, `validatorName`, `fieldPath`) for logs/diagnostics.
+- All `MCPToolValidationError` fields are required: `message`, `suggestedAction`, `fieldPath`, `validatorName`, `toolName`.
+- AI-facing validation output exposes only `message` and `suggestedAction`.
+- Use `fieldPath: "$"` for root-level/call-level validation errors; use direct paths like `issueId`, `messages[0]`, or `arguments` for field-specific errors.
+- Validators must always provide a non-empty `suggestedAction` that tells the AI how to fix the tool call.
+- `MCPToolExecutor.execute(_:)` should remain small; validation orchestration belongs in private helper methods.
+- Tool definitions should not duplicate shared, generic validation concerns.
+- The current validation pipeline defaults to zero validators; real validators will be added later.
+
+Planned shared validators include:
+
+- required fields validation
+- unknown fields validation
+- type validation
+- enum validation
+- issueId validation
+- permission validation
+- sensitive data validation
+- audit/confirmation validation
 
 The current tool groups are:
 
