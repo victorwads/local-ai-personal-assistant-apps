@@ -1,0 +1,159 @@
+import Foundation
+import WebKit
+
+@MainActor
+final class WhatsAppChatCrawlingOrchestrator {
+    private let chatRepository: any ChatRepository
+    private let yamlText: String
+    private let logStore: WhatsAppCrawlingLogStore
+    private var onStatusUpdate: ((String) -> Void)?
+    private let debugForceRefreshFirstChat = false
+
+    init(
+        chatRepository: any ChatRepository,
+        yamlText: String,
+        logStore: WhatsAppCrawlingLogStore,
+        onStatusUpdate: ((String) -> Void)? = nil
+    ) {
+        self.chatRepository = chatRepository
+        self.yamlText = yamlText
+        self.logStore = logStore
+        self.onStatusUpdate = onStatusUpdate
+    }
+
+    func setStatusUpdateHandler(_ handler: ((String) -> Void)?) {
+        onStatusUpdate = handler
+    }
+
+    func runCycle(in webView: WKWebView) async -> CrawlingResult<Void> {
+        do {
+            logStore.append(source: "Orchestrator", "Extraction started")
+            onStatusUpdate?("Reading flows")
+            let extractionJSON = try await WebYAMLExtractionRunner.run(yamlText: yamlText, in: webView)
+            guard let rootObject = parseJSONObject(from: extractionJSON) else {
+                logStore.append(source: "Error", "Extraction parse failed")
+                return .failure(.parsingFailed("Unable to parse extraction JSON."))
+            }
+
+            let blocked = blockedFlows(rootObject)
+            if blocked.loginQr || blocked.downloading {
+                logStore.append(source: "Flow", "Blocked flow loginQr=\(blocked.loginQr) downloading=\(blocked.downloading)")
+                return .success(())
+            }
+            logStore.append(source: "Flow", "No blocked flows")
+
+            onStatusUpdate?("Listing chats")
+            let headers = WhatsAppChatListParser.parse(from: rootObject)
+            logStore.append(source: "ChatList", "Found \(headers.count) chats")
+            onStatusUpdate?("Found \(headers.count) chats")
+            let interactor = WebViewElementInteractor(webView: webView)
+
+            for (index, header) in headers.enumerated() {
+                let existingChat = try await chatRepository.getChat(id: header.id)
+                let refreshByRule = shouldRefreshChatMessages(header: header, existingChat: existingChat)
+                let forcedRefresh = debugForceRefreshFirstChat && index == 0
+                let shouldRefresh = refreshByRule || forcedRefresh
+                logStore.append(
+                    source: "Decision",
+                    "title='\(header.title)' id=\(header.id) unread=\(header.unreadCount) stateHash=\(header.stateHash) existing=\(existingChat != nil) existingStateHash=\(existingChat?.stateHash ?? "nil") refresh=\(shouldRefresh) clickable=\(header.openChatElement != nil)"
+                )
+
+                let chat = Chat(
+                    id: header.id,
+                    title: header.title,
+                    lastMessagePreview: header.lastMessagePreview,
+                    lastMessageTimeText: header.lastMessageTimeText,
+                    unreadCount: header.unreadCount,
+                    stateHash: header.stateHash
+                )
+                try await chatRepository.upsertChat(chat)
+                guard shouldRefresh else {
+                    logStore.append(source: "Decision", "Skip '\(header.title)': shouldRefresh=false")
+                    continue
+                }
+
+                guard let openElement = header.openChatElement else {
+                    logStore.append(source: "Interactor", "Skip '\(header.title)': missing clickable handle")
+                    continue
+                }
+
+                onStatusUpdate?("Opening \(header.title)")
+                logStore.append(source: "Interactor", "Click started for '\(header.title)'")
+                let clicked = try await interactor.click(openElement)
+                logStore.append(source: "Interactor", "Click result=\(clicked) for '\(header.title)'")
+                guard clicked else {
+                    logStore.append(source: "Interactor", "Skip '\(header.title)': click returned false")
+                    continue
+                }
+
+                logStore.append(source: "CurrentChat", "Waiting selected chat '\(header.title)'")
+                guard let selectedRoot = await waitForSelectedChat(expectedChatId: header.id, title: header.title, webView: webView) else {
+                    logStore.append(source: "CurrentChat", "Selected chat did not match expected id=\(header.id)")
+                    continue
+                }
+
+                guard let parsedCurrentChat = WhatsAppCurrentChatParser.parse(from: selectedRoot, referenceDate: Date()) else {
+                    logStore.append(source: "CurrentChat", "Skip '\(header.title)': parse current chat failed")
+                    continue
+                }
+                logStore.append(source: "CurrentChat", "Selected title='\(parsedCurrentChat.chatTitle)' id=\(parsedCurrentChat.chatId)")
+                logStore.append(source: "CurrentChat", "Parsed \(parsedCurrentChat.messages.count) messages")
+                onStatusUpdate?("Extracting messages from \(parsedCurrentChat.chatTitle)")
+                try await chatRepository.insertMessages(parsedCurrentChat.messages)
+                logStore.append(source: "Repository", "Inserted new messages from \(parsedCurrentChat.messages.count) parsed messages for '\(parsedCurrentChat.chatTitle)'")
+                onStatusUpdate?("Persisted new messages")
+            }
+
+            return .success(())
+        } catch {
+            logStore.append(source: "Error", "Cycle failed: \(error.localizedDescription)")
+            return .failure(.unknown(error.localizedDescription))
+        }
+    }
+
+    func shouldRefreshChatMessages(header: ParsedChatHeader, existingChat: Chat?) -> Bool {
+        guard let existingChat else { return true }
+        if header.unreadCount > 0 { return true }
+        if header.stateHash != existingChat.stateHash { return true }
+        return false
+    }
+
+    private func blockedFlows(_ rootObject: [String: Any]) -> (loginQr: Bool, downloading: Bool) {
+        guard let flows = rootObject["flows"] as? [String: Any] else { return (false, false) }
+        let loginQr = (flows["loginQr"] as? Bool) ?? false
+        let downloading = (flows["downloading"] as? Bool) ?? false
+        return (loginQr, downloading)
+    }
+
+    private func parseJSONObject(from text: String) -> [String: Any]? {
+        guard let data = text.data(using: .utf8) else { return nil }
+        guard let object = try? JSONSerialization.jsonObject(with: data) else { return nil }
+        return object as? [String: Any]
+    }
+
+    private func waitForSelectedChat(expectedChatId: String, title: String, webView: WKWebView) async -> [String: Any]? {
+        for attempt in 1...10 {
+            do {
+                let currentChatJSON = try await WebYAMLExtractionRunner.run(yamlText: yamlText, in: webView)
+                guard let currentChatObject = parseJSONObject(from: currentChatJSON) else {
+                    logStore.append(source: "CurrentChat", "Retry \(attempt)/10 parse JSON failed")
+                    try? await Task.sleep(nanoseconds: 300_000_000)
+                    continue
+                }
+                if let parsed = WhatsAppCurrentChatParser.parse(from: currentChatObject, referenceDate: Date()) {
+                    if parsed.chatId == expectedChatId {
+                        logStore.append(source: "CurrentChat", "Matched '\(title)' on attempt \(attempt)/10")
+                        return currentChatObject
+                    }
+                    logStore.append(source: "CurrentChat", "Retry \(attempt)/10 selected='\(parsed.chatTitle)' id=\(parsed.chatId) expected=\(expectedChatId)")
+                } else {
+                    logStore.append(source: "CurrentChat", "Retry \(attempt)/10 parse=nil for expected '\(title)'")
+                }
+            } catch {
+                logStore.append(source: "Error", "Retry \(attempt)/10 extraction failed: \(error.localizedDescription)")
+            }
+            try? await Task.sleep(nanoseconds: 300_000_000)
+        }
+        return nil
+    }
+}
