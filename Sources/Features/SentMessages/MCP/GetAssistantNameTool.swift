@@ -20,17 +20,10 @@ struct GetAssistantNameTool: MCPToolDefinition {
     func execute(
         _ call: MCPToolCall,
         context _: MCPServerContext
-    ) async -> MCPToolExecutionResult {
-        // TODO: what fuck is this?
-        let assistantName = await MainActor.run {
-            settings.assistantName
-        }
-
-        return .success(
-            toolName: call.name,
-            payload: .object([
-                "assistantName": .string(assistantName),
-            ])
-        )
+    ) async throws -> MCPJSONValue {
+        let assistantName = await MainActor.run { settings.assistantName }
+        return .object([
+            "assistantName": .string(assistantName)
+        ])
     }
 }

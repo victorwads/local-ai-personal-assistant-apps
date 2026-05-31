@@ -12,7 +12,7 @@ protocol MCPToolDefinition {
     func execute(
         _ call: MCPToolCall,
         context: MCPServerContext
-    ) async -> MCPToolExecutionResult
+    ) async throws -> MCPJSONValue
 }
 
 extension MCPToolDefinition {
@@ -21,11 +21,8 @@ extension MCPToolDefinition {
     func execute(
         _ call: MCPToolCall,
         context _: MCPServerContext
-    ) async -> MCPToolExecutionResult {
-        .failure(
-            toolName: call.name,
-            error: .notImplemented("Tool definition not implemented yet.")
-        )
+    ) async throws -> MCPJSONValue {
+        throw MCPServerError.notImplemented("Tool definition not implemented yet.")
     }
 
     var jsonValue: MCPJSONValue {

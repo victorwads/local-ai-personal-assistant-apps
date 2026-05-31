@@ -15,7 +15,7 @@ struct UpdateSensitiveDataTool: MCPToolDefinition {
             "key": .object(["type": .string("string")]),
             "kind": .object([
                 "type": .string("string"),
-                "enum": .array(SensitiveDataKind.allCases.map { .string($0.rawValue) }),
+                "enum": MCPSupport.defineEnum(SensitiveDataKind.self),
                 "description": .string("Broad sensitive data category. Allowed values: document, email, personalInfo, bankInformation, healthInformation, relationshipInfo, other.")
             ]),
             "value": .object(["type": .string("string")]),

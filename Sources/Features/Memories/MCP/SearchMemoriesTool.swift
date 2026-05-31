@@ -27,24 +27,17 @@ struct SearchMemoriesTool: MCPToolDefinition {
     func execute(
         _ call: MCPToolCall,
         context _: MCPServerContext
-    ) async -> MCPToolExecutionResult {
-        do {
-            let query = try MCPToolArguments.requiredString("query", from: call)
-            let limit = MCPToolArguments.optionalLimit(from: call, default: 10)
-            let normalizedQuery = query.localizedLowercase
-            let memories = try await repository.getAll()
-                .filter { memory in
-                    memory.key.localizedLowercase.contains(normalizedQuery)
-                        || memory.value.localizedLowercase.contains(normalizedQuery)
-                }
-                .prefix(limit)
+    ) async throws -> MCPJSONValue {
+        let query = try MCPSupport.string("query", from: call)
+        let limit = MCPSupport.optionalLimit(from: call, default: 10)
+        let normalizedQuery = query.localizedLowercase
+        let memories = try await repository.getAll()
+            .filter { memory in
+                memory.key.localizedLowercase.contains(normalizedQuery)
+                    || memory.value.localizedLowercase.contains(normalizedQuery)
+            }
+            .prefix(limit)
 
-            return .success(
-                toolName: call.name,
-                payload: MemoryMCPToolSupport.memoryList(Array(memories))
-            )
-        } catch {
-            return MemoryMCPToolSupport.failure(toolName: call.name, error)
-        }
+        return MemoryMCPToolSupport.memoryList(Array(memories))
     }
 }

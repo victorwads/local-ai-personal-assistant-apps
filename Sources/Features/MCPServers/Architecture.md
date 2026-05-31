@@ -52,18 +52,41 @@ Rules:
 - Validators must always provide a non-empty `suggestedAction` that tells the AI how to fix the tool call.
 - `MCPToolExecutor.execute(_:)` should remain small; validation orchestration belongs in private helper methods.
 - Tool definitions should not duplicate shared, generic validation concerns.
-- The current validation pipeline defaults to zero validators; real validators will be added later.
+- `MCPServersFeature` currently registers `MCPIssueIdValidator` as a shared pre-execution validator.
 
-Planned shared validators include:
+Registered validator order:
 
-- required fields validation
-- unknown fields validation
-- type validation
-- enum validation
-- issueId validation
-- permission validation
-- sensitive data validation
-- audit/confirmation validation
+1. `MCPRequiredFieldsValidator`
+2. `MCPUnknownFieldsValidator`
+3. `MCPArgumentTypeValidator`
+4. `MCPEnumValidator`
+5. `MCPIssueIdValidator`
+
+### Schema-based validators
+
+- `MCPRequiredFieldsValidator` reads required fields from each tool schema and rejects missing or `null` required values.
+- `MCPUnknownFieldsValidator` rejects arguments that are not declared in the schema properties.
+- `MCPArgumentTypeValidator` validates present argument types against schema property `type` values.
+- `MCPEnumValidator` validates string enum fields declared directly in each property schema under `inputSchema.properties.<field>.enum`.
+- Validators aggregate all validation errors before tool execution is blocked.
+- `fieldPath: "$"` indicates a root-level validation error, such as malformed tool schema metadata.
+- Shared validators centralize generic checks so tools can eventually stop duplicating generic parsing guards.
+- `inputSchema` is the single source of truth for required-field/type/unknown-field/enum validation.
+- Tool implementations should not duplicate generic required/type/unknown/enum/issueId validation already owned by validators.
+- Tool implementations still own feature/domain validation (state transitions, repository/domain existence checks, permission/security rules, and domain-specific semantics).
+- Reusable MCP extraction/schema helpers belong in `Sources/Features/MCPServers/Support/`.
+- Feature MCP support files should stay focused on feature-specific payload mapping and domain helper logic.
+
+### `MCPIssueIdValidator`
+
+- Validates only the exact `issueId` argument key (not aliases such as `issue_id`).
+- Runs before tool execution and blocks execution when validation fails.
+- Allows calls with no `issueId` argument to proceed unchanged.
+- Requires `issueId` to be a non-empty string.
+- Resolves `IssuesFeature` lazily through a provider closure only when `issueId` is present.
+- Uses `IssuesFeature` validation APIs and never reaches repositories through `MCPServerContext`.
+- Returns standardized actionable validation errors for missing/invalid/inactive issue references.
+- Treats missing, invalid, resolved, cancelled, and finished issues as invalid/inactive for tool execution.
 
 The current tool groups are:
 

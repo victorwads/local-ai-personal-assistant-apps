@@ -28,27 +28,16 @@ struct ListChatMessagesTool: MCPToolDefinition {
     func execute(
         _ call: MCPToolCall,
         context _: MCPServerContext
-    ) async -> MCPToolExecutionResult {
-        do {
-            let chatId = try MCPToolArguments.requiredString("chatId", from: call)
-            let limit = MCPToolArguments.optionalLimit(from: call, default: 10)
-            let messages = try await repository.listMessages(chatId: chatId, limit: limit)
-            return .success(
-                toolName: call.name,
-                payload: .object([
-                    "chatId": .string(chatId),
-                    "count": .int(messages.count),
-                    "messages": .array(messages.map(messageJSON))
-                ])
-            )
-        } catch let error as MCPToolArgumentError {
-            return .failure(toolName: call.name, error: error.serverError)
-        } catch {
-            return .failure(
-                toolName: call.name,
-                error: .executionFailed("Failed to list chat messages: \(error.localizedDescription)")
-            )
-        }
+    ) async throws -> MCPJSONValue {
+        let chatId = try MCPSupport.string("chatId", from: call)
+        let limit = MCPSupport.optionalLimit(from: call, default: 10)
+        let messages = try await repository.listMessages(chatId: chatId, limit: limit)
+
+        return .object([
+            "chatId": .string(chatId),
+            "count": .int(messages.count),
+            "messages": .array(messages.map(messageJSON))
+        ])
     }
 
     private func messageJSON(_ message: ChatMessage) -> MCPJSONValue {

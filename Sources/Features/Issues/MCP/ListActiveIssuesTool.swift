@@ -20,12 +20,8 @@ struct ListActiveIssuesTool: MCPToolDefinition {
     func execute(
         _ call: MCPToolCall,
         context _: MCPServerContext
-    ) async -> MCPToolExecutionResult {
-        do {
-            let issues = try await repository.getActiveIssues()
-            return .success(toolName: call.name, payload: IssueMCPToolSupport.issueList(issues))
-        } catch {
-            return IssueMCPToolSupport.failure(toolName: call.name, error)
-        }
+    ) async throws -> MCPJSONValue {
+        let issues = try await repository.getActiveIssues()
+        return IssueMCPToolSupport.issueList(issues)
     }
 }

@@ -15,7 +15,7 @@ struct SearchSensitiveDataTool: MCPToolDefinition {
                 "type": .string("array"),
                 "items": .object([
                     "type": .string("string"),
-                    "enum": .array(SensitiveDataKind.allCases.map { .string($0.rawValue) })
+                    "enum": MCPSupport.defineEnum(SensitiveDataKind.self)
                 ]),
                 "description": .string("Optional list of sensitive data categories to include. If omitted or empty, all non-deleted sensitive data records are searched.")
             ])

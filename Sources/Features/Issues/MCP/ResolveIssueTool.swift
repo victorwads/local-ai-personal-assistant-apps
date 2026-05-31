@@ -30,41 +30,37 @@ struct ResolveIssueTool: MCPToolDefinition {
     func execute(
         _ call: MCPToolCall,
         context _: MCPServerContext
-    ) async -> MCPToolExecutionResult {
-        do {
-            let id = try MCPToolArguments.requiredString("id", from: call)
-            guard var issue = try await repository.getById(id) else {
-                throw IssueMCPToolError.issueNotFound(id)
-            }
-
-            issue.status = .resolved
-            issue.finished = true
-            let saved = try await repository.save(issue)
-            let timelineItem: IssueTimelineItem?
-            if let resolutionDescription = MCPToolArguments.optionalString("resolutionDescription", from: call) {
-                timelineItem = try await timelineRepository.save(
-                    IssueTimelineItem(
-                        id: nil,
-                        issueId: saved.id ?? id,
-                        kind: "resolved",
-                        description: resolutionDescription
-                    )
-                )
-            } else {
-                timelineItem = nil
-            }
-
-            var payload: [String: MCPJSONValue] = [
-                "issue": IssueMCPToolSupport.issueObject(saved),
-                "resolutionDescription": MCPToolArguments.optionalString("resolutionDescription", from: call).map(MCPJSONValue.string) ?? .null
-            ]
-            if let timelineItem {
-                payload["timelineItem"] = IssueMCPToolSupport.timelineItemObject(timelineItem)
-            }
-
-            return .success(toolName: call.name, payload: .object(payload))
-        } catch {
-            return IssueMCPToolSupport.failure(toolName: call.name, error)
+    ) async throws -> MCPJSONValue {
+        let id = try MCPSupport.string("id", from: call)
+        guard var issue = try await repository.getById(id) else {
+            throw IssueMCPToolError.issueNotFound(id)
         }
+
+        issue.status = .resolved
+        issue.finished = true
+        let saved = try await repository.save(issue)
+        let timelineItem: IssueTimelineItem?
+        if let resolutionDescription = MCPSupport.optionalString("resolutionDescription", from: call) {
+            timelineItem = try await timelineRepository.save(
+                IssueTimelineItem(
+                    id: nil,
+                    issueId: saved.id ?? id,
+                    kind: "resolved",
+                    description: resolutionDescription
+                )
+            )
+        } else {
+            timelineItem = nil
+        }
+
+        var payload: [String: MCPJSONValue] = [
+            "issue": IssueMCPToolSupport.issueObject(saved),
+            "resolutionDescription": MCPSupport.optionalString("resolutionDescription", from: call).map(MCPJSONValue.string) ?? .null
+        ]
+        if let timelineItem {
+            payload["timelineItem"] = IssueMCPToolSupport.timelineItemObject(timelineItem)
+        }
+
+        return .object(payload)
     }
 }

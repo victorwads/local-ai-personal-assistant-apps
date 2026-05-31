@@ -35,18 +35,11 @@ struct CreateMemoryTool: MCPToolDefinition {
     func execute(
         _ call: MCPToolCall,
         context _: MCPServerContext
-    ) async -> MCPToolExecutionResult {
-        do {
-            let key = try MCPToolArguments.requiredString("key", from: call)
-            let value = try MCPToolArguments.requiredString("value", from: call)
-            let memory = try await repository.save(Memory(id: nil, key: key, value: value))
+    ) async throws -> MCPJSONValue {
+        let key = try MCPSupport.string("key", from: call)
+        let value = try MCPSupport.string("value", from: call)
+        let memory = try await repository.save(Memory(id: nil, key: key, value: value))
 
-            return .success(
-                toolName: call.name,
-                payload: .object(["memory": MemoryMCPToolSupport.memoryObject(memory)])
-            )
-        } catch {
-            return MemoryMCPToolSupport.failure(toolName: call.name, error)
-        }
+        return .object(["memory": MemoryMCPToolSupport.memoryObject(memory)])
     }
 }

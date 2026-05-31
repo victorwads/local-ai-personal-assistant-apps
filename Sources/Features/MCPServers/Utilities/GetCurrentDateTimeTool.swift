@@ -14,7 +14,7 @@ struct GetCurrentDateTimeTool: MCPToolDefinition {
     func execute(
         _ call: MCPToolCall,
         context _: MCPServerContext
-    ) async -> MCPToolExecutionResult {
+    ) async throws -> MCPJSONValue {
         let now = Date()
         let iso8601Formatter = ISO8601DateFormatter()
         let localFormatter = DateFormatter()
@@ -22,14 +22,11 @@ struct GetCurrentDateTimeTool: MCPToolDefinition {
         localFormatter.timeZone = .current
         localFormatter.locale = Locale.current
 
-        return .success(
-            toolName: call.name,
-            payload: .object([
-                "iso8601": .string(iso8601Formatter.string(from: now)),
-                "timestamp": .int(Int(now.timeIntervalSince1970)),
-                "timezone": .string(TimeZone.current.identifier),
-                "localDescription": .string(localFormatter.string(from: now))
-            ])
-        )
+        return .object([
+            "iso8601": .string(iso8601Formatter.string(from: now)),
+            "timestamp": .int(Int(now.timeIntervalSince1970)),
+            "timezone": .string(TimeZone.current.identifier),
+            "localDescription": .string(localFormatter.string(from: now))
+        ])
     }
 }

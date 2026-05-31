@@ -16,19 +16,38 @@ final class MCPToolExecutor: MCPToolExecutionProviding {
     }
 
     func execute(_ call: MCPToolCall) async -> MCPToolExecutionResult {
+        let startTime = Date()
         guard let definition = registry.definition(named: call.name) else {
-            return .failure(toolName: call.name, error: .toolNotFound(call.name))
+            return .failure(
+                toolName: call.name,
+                error: .toolNotFound(call.name),
+                durationMilliseconds: durationMilliseconds(since: startTime)
+            )
         }
 
         let validationErrors = await validate(call, definition: definition)
         if !validationErrors.isEmpty {
             return .failure(
                 toolName: call.name,
-                error: .validationFailed(validationErrors)
+                error: .validationFailed(validationErrors),
+                durationMilliseconds: durationMilliseconds(since: startTime)
             )
         }
 
-        return await definition.execute(call, context: context)
+        do {
+            let payload = try await definition.execute(call, context: context)
+            return .success(
+                toolName: call.name,
+                payload: payload,
+                durationMilliseconds: durationMilliseconds(since: startTime)
+            )
+        } catch {
+            return .failure(
+                toolName: call.name,
+                error: mapExecutionError(error),
+                durationMilliseconds: durationMilliseconds(since: startTime)
+            )
+        }
     }
 
     private func validate(
@@ -100,5 +119,27 @@ final class MCPToolExecutor: MCPToolExecutionProviding {
                     return lhs.suggestedAction < rhs.suggestedAction
                 }
             }
+    }
+
+    private func durationMilliseconds(since startTime: Date) -> Double {
+        Date().timeIntervalSince(startTime) * 1000
+    }
+
+    private func mapExecutionError(_ error: Error) -> MCPServerError {
+        if error is CancellationError {
+            return .cancelled
+        }
+        if let serverError = error as? MCPServerError {
+            return serverError
+        }
+        if let serverErrorProvider = error as? MCPServerErrorProviding {
+            return serverErrorProvider.serverError
+        }
+        if error is MCPToolExtractionError {
+            return .executionFailed(error.localizedDescription)
+        }
+
+        let message = error.localizedDescription.trimmedNonEmpty ?? "Unknown error."
+        return .executionFailed(message)
     }
 }

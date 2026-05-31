@@ -50,47 +50,40 @@ struct UpdateIssueTool: MCPToolDefinition {
     func execute(
         _ call: MCPToolCall,
         context _: MCPServerContext
-    ) async -> MCPToolExecutionResult {
-        do {
-            let id = try MCPToolArguments.requiredString("id", from: call)
-            guard var issue = try await repository.getById(id) else {
-                throw IssueMCPToolError.issueNotFound(id)
-            }
+    ) async throws -> MCPJSONValue {
+        let id = try MCPSupport.string("id", from: call)
+        guard var issue = try await repository.getById(id) else {
+            throw IssueMCPToolError.issueNotFound(id)
+        }
 
-            if let description = MCPToolArguments.optionalString("description", from: call) {
-                issue.description = description
-            }
-            if let resolutionCondition = MCPToolArguments.optionalString("resolutionCondition", from: call) {
-                issue.resolutionCondition = resolutionCondition
-            }
-            if let priority = IssueMCPToolSupport.optionalPriority("priority", from: call) {
-                issue.priority = priority
-            }
+        if let description = MCPSupport.optionalString("description", from: call) {
+            issue.description = description
+        }
+        if let resolutionCondition = MCPSupport.optionalString("resolutionCondition", from: call) {
+            issue.resolutionCondition = resolutionCondition
+        }
+        if let priority = IssueMCPToolSupport.optionalPriority("priority", from: call) {
+            issue.priority = priority
+        }
 
-            let saved = try await repository.save(issue)
-            let timelineInputs = try IssueMCPToolSupport.timelineItemInputs(from: call)
-            var timelineItems: [IssueTimelineItem] = []
-            for input in timelineInputs {
-                timelineItems.append(
-                    try await timelineRepository.save(
-                        IssueTimelineItem(
-                            id: nil,
-                            issueId: saved.id ?? id,
-                            kind: input.kind,
-                            description: input.description
-                        )
+        let saved = try await repository.save(issue)
+        let timelineInputs = try IssueMCPToolSupport.timelineItemInputs(from: call)
+        var timelineItems: [IssueTimelineItem] = []
+        for input in timelineInputs {
+            timelineItems.append(
+                try await timelineRepository.save(
+                    IssueTimelineItem(
+                        id: nil,
+                        issueId: saved.id ?? id,
+                        kind: input.kind,
+                        description: input.description
                     )
                 )
-            }
-            return .success(
-                toolName: call.name,
-                payload: .object([
-                    "issue": IssueMCPToolSupport.issueObject(saved),
-                    "timelineItems": IssueMCPToolSupport.timelineItemsObject(timelineItems)
-                ])
             )
-        } catch {
-            return IssueMCPToolSupport.failure(toolName: call.name, error)
         }
+        return .object([
+            "issue": IssueMCPToolSupport.issueObject(saved),
+            "timelineItems": IssueMCPToolSupport.timelineItemsObject(timelineItems)
+        ])
     }
 }

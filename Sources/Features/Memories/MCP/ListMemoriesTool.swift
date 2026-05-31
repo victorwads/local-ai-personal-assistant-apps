@@ -20,15 +20,8 @@ struct ListMemoriesTool: MCPToolDefinition {
     func execute(
         _ call: MCPToolCall,
         context _: MCPServerContext
-    ) async -> MCPToolExecutionResult {
-        do {
-            let memories = try await repository.getAll()
-            return .success(
-                toolName: call.name,
-                payload: MemoryMCPToolSupport.memoryList(memories)
-            )
-        } catch {
-            return MemoryMCPToolSupport.failure(toolName: call.name, error)
-        }
+    ) async throws -> MCPJSONValue {
+        let memories = try await repository.getAll()
+        return MemoryMCPToolSupport.memoryList(memories)
     }
 }

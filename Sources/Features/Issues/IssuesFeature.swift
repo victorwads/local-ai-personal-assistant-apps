@@ -1,7 +1,7 @@
 import Foundation
 
 @MainActor
-final class IssuesFeature: FeatureRuntime {
+final class IssuesFeature: FeatureRuntime, IssueReferenceValidating {
     override class var id: String { "issues" }
     let repository: FirestoreIssueRepository
     let timelineRepository: FirestoreIssueTimelineRepository

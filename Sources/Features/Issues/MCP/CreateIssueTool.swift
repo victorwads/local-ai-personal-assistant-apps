@@ -39,28 +39,21 @@ struct CreateIssueTool: MCPToolDefinition {
     func execute(
         _ call: MCPToolCall,
         context _: MCPServerContext
-    ) async -> MCPToolExecutionResult {
-        do {
-            let saved = try await repository.save(
-                Issue(
-                    id: nil,
-                    title: try MCPToolArguments.requiredString("title", from: call),
-                    description: try MCPToolArguments.requiredString("description", from: call),
-                    initialRequest: try MCPToolArguments.requiredString("initialRequest", from: call),
-                    resolutionCondition: try MCPToolArguments.requiredString("resolutionCondition", from: call),
-                    priority: IssueMCPToolSupport.optionalPriority("priority", from: call) ?? .medium,
-                    status: .pending,
-                    finished: false,
-                    suspendUntil: nil
-                )
+    ) async throws -> MCPJSONValue {
+        let saved = try await repository.save(
+            Issue(
+                id: nil,
+                title: try MCPSupport.string("title", from: call),
+                description: try MCPSupport.string("description", from: call),
+                initialRequest: try MCPSupport.string("initialRequest", from: call),
+                resolutionCondition: try MCPSupport.string("resolutionCondition", from: call),
+                priority: IssueMCPToolSupport.optionalPriority("priority", from: call) ?? .medium,
+                status: .pending,
+                finished: false,
+                suspendUntil: nil
             )
+        )
 
-            return .success(
-                toolName: call.name,
-                payload: .object(["issue": IssueMCPToolSupport.issueObject(saved)])
-            )
-        } catch {
-            return IssueMCPToolSupport.failure(toolName: call.name, error)
-        }
+        return .object(["issue": IssueMCPToolSupport.issueObject(saved)])
     }
 }

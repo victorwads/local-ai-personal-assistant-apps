@@ -17,8 +17,11 @@ Future features such as Sensitive Data, Sent Messages, Client Voice, and WhatsAp
 
 - `IssuesFeature` owns a non-optional `FirestoreIssueRepository`.
 - `IssuesFeature` also owns the issue timeline repository used by lifecycle and update actions.
-- Cross-feature issue validation should go through `IssuesFeature.validateIssueId(_:)` and repository validation methods.
+- Cross-feature issue validation should go through `IssueReferenceValidating` and `IssuesFeature.validateIssueId(_:)`.
 - Issue validation is internal Swift support for future actions; it is not exposed as a public MCP tool.
+- MCP validation uses `IssuesFeature` lazily via provider-based lookup from `MCPServersFeature`, not direct repository injection.
+- Issue reference validation for MCP treats missing, invalid, resolved, cancelled, and finished issues as inactive and blocks execution.
+- AI-facing issue-reference validation failures should use standardized actionable messages instead of exposing repository internals.
 - `create_issue` always starts pending.
 - `update_issue` updates issue details and appends explicit timeline items.
 - `suspend_issue`, `resolve_issue`, and `cancel_issue` are the lifecycle actions that mutate issue state and optionally append timeline entries.

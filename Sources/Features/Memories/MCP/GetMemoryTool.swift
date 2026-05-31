@@ -26,28 +26,21 @@ struct GetMemoryTool: MCPToolDefinition {
     func execute(
         _ call: MCPToolCall,
         context _: MCPServerContext
-    ) async -> MCPToolExecutionResult {
-        do {
-            let memory: Memory?
-            if let id = MCPToolArguments.optionalString("id", from: call) {
-                memory = try await repository.getById(id)
-            } else if let key = MCPToolArguments.optionalString("key", from: call) {
-                memory = try await repository.query(
-                    matching: ["key": key],
-                    limit: 1
-                ).first
-            } else {
-                throw MemoryMCPToolError.invalidArguments("Provide either `id` or `key`.")
-            }
-
-            return .success(
-                toolName: call.name,
-                payload: .object([
-                    "memory": memory.map(MemoryMCPToolSupport.memoryObject) ?? .null
-                ])
-            )
-        } catch {
-            return MemoryMCPToolSupport.failure(toolName: call.name, error)
+    ) async throws -> MCPJSONValue {
+        let memory: Memory?
+        if let id = MCPSupport.optionalString("id", from: call) {
+            memory = try await repository.getById(id)
+        } else if let key = MCPSupport.optionalString("key", from: call) {
+            memory = try await repository.query(
+                matching: ["key": key],
+                limit: 1
+            ).first
+        } else {
+            throw MemoryMCPToolError.invalidArguments("Provide either `id` or `key`.")
         }
+
+        return .object([
+            "memory": memory.map(MemoryMCPToolSupport.memoryObject) ?? .null
+        ])
     }
 }

@@ -28,23 +28,16 @@ struct GetIssueTool: MCPToolDefinition {
     func execute(
         _ call: MCPToolCall,
         context _: MCPServerContext
-    ) async -> MCPToolExecutionResult {
-        do {
-            let id = try MCPToolArguments.requiredString("id", from: call)
-            guard let issue = try await repository.getById(id) else {
-                throw IssueMCPToolError.issueNotFound(id)
-            }
-            let timelineItems = try await timelineRepository.listItems(for: issue.id ?? id)
-
-            return .success(
-                toolName: call.name,
-                payload: .object([
-                    "issue": IssueMCPToolSupport.issueObject(issue),
-                    "timelineItems": IssueMCPToolSupport.timelineItemsObject(timelineItems)
-                ])
-            )
-        } catch {
-            return IssueMCPToolSupport.failure(toolName: call.name, error)
+    ) async throws -> MCPJSONValue {
+        let id = try MCPSupport.string("id", from: call)
+        guard let issue = try await repository.getById(id) else {
+            throw IssueMCPToolError.issueNotFound(id)
         }
+        let timelineItems = try await timelineRepository.listItems(for: issue.id ?? id)
+
+        return .object([
+            "issue": IssueMCPToolSupport.issueObject(issue),
+            "timelineItems": IssueMCPToolSupport.timelineItemsObject(timelineItems)
+        ])
     }
 }

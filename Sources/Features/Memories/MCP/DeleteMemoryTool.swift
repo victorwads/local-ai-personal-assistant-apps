@@ -27,31 +27,24 @@ struct DeleteMemoryTool: MCPToolDefinition {
     func execute(
         _ call: MCPToolCall,
         context _: MCPServerContext
-    ) async -> MCPToolExecutionResult {
-        do {
-            let id: String
-            if let providedId = MCPToolArguments.optionalString("id", from: call) {
-                id = providedId
-            } else if
-                let key = MCPToolArguments.optionalString("key", from: call),
-                let memory = try await repository.query(
-                    matching: ["key": key],
-                    limit: 1
-                ).first,
-                let memoryId = memory.id
-            {
-                id = memoryId
-            } else {
-                throw MemoryMCPToolError.invalidArguments("Provide an existing `id` or `key`.")
-            }
-
-            try await repository.delete(id)
-            return .success(
-                toolName: call.name,
-                payload: .object(["deleted": .bool(true), "id": .string(id)])
-            )
-        } catch {
-            return MemoryMCPToolSupport.failure(toolName: call.name, error)
+    ) async throws -> MCPJSONValue {
+        let id: String
+        if let providedId = MCPSupport.optionalString("id", from: call) {
+            id = providedId
+        } else if
+            let key = MCPSupport.optionalString("key", from: call),
+            let memory = try await repository.query(
+                matching: ["key": key],
+                limit: 1
+            ).first,
+            let memoryId = memory.id
+        {
+            id = memoryId
+        } else {
+            throw MemoryMCPToolError.invalidArguments("Provide an existing `id` or `key`.")
         }
+
+        try await repository.delete(id)
+        return .object(["deleted": .bool(true), "id": .string(id)])
     }
 }

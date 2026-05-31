@@ -32,37 +32,30 @@ struct SuspendIssueTool: MCPToolDefinition {
     func execute(
         _ call: MCPToolCall,
         context _: MCPServerContext
-    ) async -> MCPToolExecutionResult {
-        do {
-            let id = try MCPToolArguments.requiredString("id", from: call)
-            guard var issue = try await repository.getById(id) else {
-                throw IssueMCPToolError.issueNotFound(id)
-            }
-
-            issue.status = .suspended
-            issue.finished = false
-            issue.suspendUntil = try MCPToolArguments.requiredDate("suspendUntil", from: call)
-
-            let saved = try await repository.save(issue)
-            let reason = try MCPToolArguments.requiredString("reason", from: call)
-            let timelineItem = try await timelineRepository.save(
-                IssueTimelineItem(
-                    id: nil,
-                    issueId: saved.id ?? id,
-                    kind: "suspended",
-                    description: reason
-                )
-            )
-
-            return .success(
-                toolName: call.name,
-                payload: .object([
-                    "issue": IssueMCPToolSupport.issueObject(saved),
-                    "timelineItem": IssueMCPToolSupport.timelineItemObject(timelineItem)
-                ])
-            )
-        } catch {
-            return IssueMCPToolSupport.failure(toolName: call.name, error)
+    ) async throws -> MCPJSONValue {
+        let id = try MCPSupport.string("id", from: call)
+        guard var issue = try await repository.getById(id) else {
+            throw IssueMCPToolError.issueNotFound(id)
         }
+
+        issue.status = .suspended
+        issue.finished = false
+        issue.suspendUntil = try MCPSupport.date("suspendUntil", from: call)
+
+        let saved = try await repository.save(issue)
+        let reason = try MCPSupport.string("reason", from: call)
+        let timelineItem = try await timelineRepository.save(
+            IssueTimelineItem(
+                id: nil,
+                issueId: saved.id ?? id,
+                kind: "suspended",
+                description: reason
+            )
+        )
+
+        return .object([
+            "issue": IssueMCPToolSupport.issueObject(saved),
+            "timelineItem": IssueMCPToolSupport.timelineItemObject(timelineItem)
+        ])
     }
 }

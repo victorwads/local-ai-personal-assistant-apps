@@ -7,17 +7,10 @@ enum IssueMCPToolSupport {
     }
 
     static func optionalPriority(_ name: String, from call: MCPToolCall) -> IssuePriority? {
-        guard let rawValue = MCPToolArguments.optionalInt(name, from: call) else {
+        guard let rawValue = MCPSupport.optionalInt(name, from: call) else {
             return nil
         }
         return IssuePriority(rawValue: rawValue)
-    }
-
-    static func optionalStatus(_ name: String, from call: MCPToolCall) -> IssueStatus? {
-        guard let rawValue = MCPToolArguments.optionalString(name, from: call) else {
-            return nil
-        }
-        return IssueStatus(rawValue: rawValue)
     }
 
     static func finished(for status: IssueStatus) -> Bool {
@@ -67,37 +60,27 @@ enum IssueMCPToolSupport {
         }
 
         guard case .array(let values) = items else {
-            throw MCPToolArgumentError.missingRequired("timelineItems")
+            throw MCPToolExtractionError.missingOrInvalid("timelineItems")
         }
 
         return try values.map { value in
             guard case .object(let object) = value else {
-                throw MCPToolArgumentError.missingRequired("timelineItems")
+                throw MCPToolExtractionError.missingOrInvalid("timelineItems")
             }
 
             guard
                 let kind = object["kind"]?.stringValue?.trimmedNonEmpty,
                 let description = object["description"]?.stringValue?.trimmedNonEmpty
             else {
-                throw MCPToolArgumentError.missingRequired("timelineItems")
+                throw MCPToolExtractionError.missingOrInvalid("timelineItems")
             }
 
             return TimelineItemInput(kind: kind, description: description)
         }
     }
-
-    static func failure(toolName: String, _ error: Error) -> MCPToolExecutionResult {
-        if let argumentError = error as? MCPToolArgumentError {
-            return .failure(toolName: toolName, error: argumentError.serverError)
-        }
-        if let issueError = error as? IssueMCPToolError {
-            return .failure(toolName: toolName, error: issueError.serverError)
-        }
-        return .failure(toolName: toolName, error: .executionFailed(error.localizedDescription))
-    }
 }
 
-enum IssueMCPToolError: Error {
+enum IssueMCPToolError: Error, MCPServerErrorProviding {
     case issueNotFound(String)
     case issueFinished(String)
 

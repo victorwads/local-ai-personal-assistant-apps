@@ -5,7 +5,6 @@ final class MCPServersFeature: FeatureRuntime {
     override class var id: String { "mcpServers" }
 
     private static let serviceId = "mcp.server"
-    private static let toolCallValidators: [any MCPToolCallValidator] = []
 
     private(set) var settings: MCPServerSettingsWrapper
     private let toolExecutor: MCPToolExecutor
@@ -15,7 +14,13 @@ final class MCPServersFeature: FeatureRuntime {
         self.settings = settings
         self.toolExecutor = MCPToolExecutor(
             registry: context.mcp.toolRegistry,
-            validators: Self.toolCallValidators
+            validators: [
+                MCPRequiredFieldsValidator(),
+                MCPUnknownFieldsValidator(),
+                MCPArgumentTypeValidator(),
+                MCPEnumValidator(),
+                MCPIssueIdValidator(issueValidator: { context.feature(IssuesFeature.self) } )
+            ]
         )
         super.init(context: context)
 

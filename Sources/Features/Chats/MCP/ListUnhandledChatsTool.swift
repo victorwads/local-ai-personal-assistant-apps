@@ -26,23 +26,13 @@ struct ListUnhandledChatsTool: MCPToolDefinition {
     func execute(
         _ call: MCPToolCall,
         context _: MCPServerContext
-    ) async -> MCPToolExecutionResult {
-        do {
-            let limit = MCPToolArguments.optionalLimit(from: call, default: 10)
-            let chats = try await repository.listUnhandledChats(limit: limit)
-            return .success(
-                toolName: call.name,
-                payload: .object([
-                    "count": .int(chats.count),
-                    "chats": .array(chats.map(chatJSON))
-                ])
-            )
-        } catch {
-            return .failure(
-                toolName: call.name,
-                error: .executionFailed("Failed to list unhandled chats: \(error.localizedDescription)")
-            )
-        }
+    ) async throws -> MCPJSONValue {
+        let limit = MCPSupport.optionalLimit(from: call, default: 10)
+        let chats = try await repository.listUnhandledChats(limit: limit)
+        return .object([
+            "count": .int(chats.count),
+            "chats": .array(chats.map(chatJSON))
+        ])
     }
 
     private func chatJSON(_ chat: Chat) -> MCPJSONValue {
