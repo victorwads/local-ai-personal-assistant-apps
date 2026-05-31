@@ -1,7 +1,7 @@
 # Agent Rules
 
 * Read this file before making changes.
-* Read `Docs/Architecture.md` before making architecture-sensitive changes.
+* Read `../Docs/Architecture.md` before making architecture-sensitive changes.
 * Read `Sources/Shared/UI/Architecture.md` before changing app UI or creating reusable visual patterns.
 * When changing a feature or infrastructure area, also read the nearest `Architecture.md` file under that folder.
 * Never edit `.xcodeproj`, `.xcworkspace`, generated schemes, or `project.pbxproj` manually. Use XcodeGen only.

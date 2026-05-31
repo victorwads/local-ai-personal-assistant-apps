@@ -18,4 +18,4 @@ Shared UI components may depend on SwiftUI. They should contain only generic pre
 
 - [Features](../Features/Architecture.md)
 - [Infrastructure](../Infrastructure/Architecture.md)
-- [Global architecture](../../Docs/Architecture.md)
+- [Global architecture](../../../Docs/Architecture.md)

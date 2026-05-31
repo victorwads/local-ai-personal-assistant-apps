@@ -12,7 +12,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 SOURCES_DIR="$ROOT_DIR/Sources"
-DOCS_ARCHITECTURE="$ROOT_DIR/Docs/Architecture.md"
+DOCS_ARCHITECTURE="$ROOT_DIR/../Docs/Architecture.md"
 THIS_SCRIPT="$SCRIPT_DIR/lint.sh"
 LINTER_WARNING_THRESHOLD_SECONDS=1
 

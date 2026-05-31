@@ -94,7 +94,7 @@ In practice, the Swift app owns persistence, orchestration, UI, Accessibility in
 - [Server/Sources/](./Server/Sources/) - app, features, infrastructure, and shared UI/runtime code
 - [Server/Resources/](./Server/Resources/) - prompts, selectors, plist/config resources, and assets
 - [Server/Scripts/](./Server/Scripts/) - build and lint helpers for the V2 runtime
-- [Server/Docs/](./Server/Docs/) - architecture, tests, and integration notes
+- [Docs/](./Docs/) - architecture, tests, history, and integration notes
 - [Apps/](./Apps/) - companion app workspace content
 - [Web/](./Web/) - web-side workspace content
 
@@ -117,9 +117,9 @@ That is why the project is positioned as a personal AI operator, not just an ass
 Start here if you want to understand or extend the system:
 
 - [Server/AGENTS.md](./Server/AGENTS.md) - working rules for agents and contributors
-- [Server/Docs/Architecture.md](./Server/Docs/Architecture.md) - global architecture and runtime model
-- [Server/Docs/Tests.md](./Server/Docs/Tests.md) - intended testing strategy
-- [Server/Docs/WhisperBackendIntegration.md](./Server/Docs/WhisperBackendIntegration.md) - planned local transcription backend integration
+- [Docs/Architecture.md](./Docs/Architecture.md) - global architecture and runtime model
+- [Docs/Tests.md](./Docs/Tests.md) - intended testing strategy
+- [Docs/WhisperBackendIntegration.md](./Docs/WhisperBackendIntegration.md) - planned local transcription backend integration
 - [Server/Sources/Shared/UI/Architecture.md](./Server/Sources/Shared/UI/Architecture.md) - shared UI design guidance
 
 ## Keywords

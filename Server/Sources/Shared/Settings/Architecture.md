@@ -12,7 +12,7 @@ Features may keep feature-specific typed wrappers over `SettingsStore`, but thos
 
 ## Related Boundaries
 
-- [Global architecture](../../../Docs/Architecture.md)
+- [Global architecture](../../../../Docs/Architecture.md)
 - [Shared](../Architecture.md)
 - [Feature Runtime](../FeatureRuntime/Architecture.md)
 - [Settings Feature](../../Features/Settings/Architecture.md)

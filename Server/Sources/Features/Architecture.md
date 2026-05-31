@@ -23,4 +23,4 @@ Current local feature docs include [Sent Messages](SentMessages/Architecture.md)
 
 - [Infrastructure](../Infrastructure/Architecture.md)
 - [Shared](../Shared/Architecture.md)
-- [Global architecture](../../Docs/Architecture.md)
+- [Global architecture](../../../Docs/Architecture.md)

@@ -14,4 +14,4 @@ Firebase-specific rules live in [Firebase architecture](Firebase/Architecture.md
 
 - [Features](../Features/Architecture.md)
 - [Shared](../Shared/Architecture.md)
-- [Global architecture](../../Docs/Architecture.md)
+- [Global architecture](../../../Docs/Architecture.md)
