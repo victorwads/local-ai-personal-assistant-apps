@@ -15,6 +15,13 @@ final class FirestoreSensitiveDataUsageRepository: FirestoreRepository<Sensitive
         )
     }
 
+    func listUsage(issueId: String) async throws -> [SensitiveDataUsage] {
+        try await query(
+            matching: ["issueId": issueId],
+            sortedBy: [FirestoreRepositorySort(field: "_createdAt", descending: true)]
+        )
+    }
+
     func listRecentUsage(limit: Int = 50) async throws -> [SensitiveDataUsage] {
         try await query(
             sortedBy: [FirestoreRepositorySort(field: "_createdAt", descending: true)],

@@ -148,6 +148,8 @@ ProfileRuntime.openWindow()
 
 Opening a profile window is independent from starting profile services. It must not start WhatsApp WebView rendering, crawling/polling, AI connection services, MCP servers, or other service runtimes. The CommandCenter may render while `ProfileRuntimeState` is `stopped`; it receives profile context and settings registries from the ensured container.
 
+Feature-owned secondary windows also flow through the profile runtime boundary. The app/window layer manages generic `FeatureWindowRequest` values only, keyed by profile id plus a feature-owned window id. Feature runtimes build their own titles and root views, and `AppWindowManager` must not add feature-specific APIs such as `showIssueDetailWindow`.
+
 The intended `hideWindow` flow is:
 
 ```text

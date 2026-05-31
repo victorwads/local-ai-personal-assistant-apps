@@ -25,4 +25,8 @@ final class SensitiveDataFeature: FeatureRuntime {
             DeleteSensitiveDataTool(repositories: repositories)
         ])
     }
+
+    func listUsageByIssueId(_ issueId: String) async throws -> [SensitiveDataUsage] {
+        try await repositories.usage.listUsage(issueId: issueId)
+    }
 }

@@ -55,6 +55,20 @@ final class ProfileRuntime: ObservableObject {
         windowState = .visible
     }
 
+    func openIssueDetailWindow(
+        issueId: String,
+        using windowManager: ProfileWindowManaging?
+    ) async throws {
+        let container = try await ensureContainer()
+        let issuesFeature = container.appFeatures.feature(IssuesFeature.self)
+        let request = try await issuesFeature.makeIssueDetailWindowRequest(issueId: issueId)
+
+        windowManager?.showFeatureWindow(
+            profileId: context.profileId,
+            request: request
+        )
+    }
+
     func hideWindow(using windowManager: ProfileWindowManaging?) {
         guard let profileId = context.profile.id else { return }
         windowManager?.hideProfileWindow(profileId: profileId)

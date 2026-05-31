@@ -26,7 +26,15 @@ struct ProfileWindowHostView: View {
                 runtimeState: profilesController.displayState(for: profile).runtimeState,
                 windowState: profilesController.displayState(for: profile).windowState,
                 statusRegistry: container.statusRegistry,
-                appFeatures: container.appFeatures
+                appFeatures: container.appFeatures,
+                onOpenIssueDetail: { issueId in
+                    Task {
+                        await profilesController.openIssueDetailWindow(
+                            profileId: profileId,
+                            issueId: issueId
+                        )
+                    }
+                }
             )
         } else if resolvedProfile == nil {
             loading("Loading profile...")

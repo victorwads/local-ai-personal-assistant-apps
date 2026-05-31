@@ -8,13 +8,17 @@ struct CommandCenterScreenRegistry {
         profile: Profile,
         runtimeState: ProfileRuntimeState,
         windowState: ProfileWindowState,
-        appFeatures: AppFeatures
+        appFeatures: AppFeatures,
+        onOpenIssueDetail: @escaping (String) -> Void
     ) -> some View {
         switch route {
         case .myProfile:
             MyProfileScreen(profile: profile, runtimeState: runtimeState, windowState: windowState)
         case .issues:
-            IssuesScreen(feature: appFeatures.feature(IssuesFeature.self))
+            IssuesScreen(
+                feature: appFeatures.feature(IssuesFeature.self),
+                onOpenIssueDetail: onOpenIssueDetail
+            )
         case .memories:
             MemoriesScreen(feature: appFeatures.feature(MemoriesFeature.self))
         case .sensitiveData:

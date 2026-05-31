@@ -31,3 +31,5 @@ Future features such as Sensitive Data, Sent Messages, Client Voice, and WhatsAp
 - The first Issues screen is intentionally list-only.
 - It loads active issues and shows lightweight operational cards.
 - Rich history, timeline, and dashboard experiences are intentionally deferred.
+- Client Voice detail integration is still repository-pending, so Issue detail should render an empty state there until a concrete data source is wired.
+- Issues owns construction of Issue detail secondary windows through a generic `FeatureWindowRequest`; the app/window layer only manages the resulting generic window.

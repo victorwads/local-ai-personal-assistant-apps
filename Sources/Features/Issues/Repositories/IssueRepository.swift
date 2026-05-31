@@ -14,7 +14,16 @@ final class FirestoreIssueRepository: FirestoreRepository<Issue> {
     }
 
     func getActiveIssues() async throws -> [Issue] {
-        try await query(matching: ["finished": false])
+        try await query(
+            matching: ["finished": false],
+            sortedBy: [FirestoreRepositorySort(field: "_updatedAt", descending: true)]
+        )
+    }
+
+    func listAllIssues() async throws -> [Issue] {
+        try await query(
+            sortedBy: [FirestoreRepositorySort(field: "_updatedAt", descending: true)]
+        )
     }
 
     func validateIssueId(_ issueId: String) async throws -> Issue {

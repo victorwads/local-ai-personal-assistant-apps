@@ -5,16 +5,18 @@ final class SentMessagesFeature: FeatureRuntime {
     override class var id: String { "sentMessages" }
 
     let repository: FirestoreSentMessageRepository
-    private(set) var settings: SentMessagesSettingsWrapper
+    let settings: SentMessagesSettingsWrapper
 
     required init(context: FeatureContext) {
         guard let scope = context.profileContext.scope else {
             preconditionFailure("SentMessagesFeature requires a persisted profile scope.")
         }
 
-        let settings = SentMessagesSettingsWrapper(settings: context.settings.store)
         self.repository = FirestoreSentMessageRepository(scope: scope)
-        self.settings = settings
+        self.settings = SentMessagesSettingsWrapper(
+            settings: context.settings.store
+        )
+
         super.init(context: context)
 
         context.settings.sectionRegistry.register(
@@ -31,5 +33,9 @@ final class SentMessagesFeature: FeatureRuntime {
                 }
             )
         ])
+    }
+
+    func listByIssueId(_ issueId: String) async throws -> [SentMessage] {
+        try await repository.listByIssueId(issueId)
     }
 }

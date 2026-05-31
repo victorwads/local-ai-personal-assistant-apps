@@ -2,25 +2,44 @@ import SwiftUI
 
 struct IssuesScreen: View {
     let feature: IssuesFeature
+    let onOpenIssueDetail: (String) -> Void
 
     @State private var issues: [Issue] = []
     @State private var isLoading = false
     @State private var errorMessage: String?
+    @State private var selectedFilter: IssueListFilter = .active
 
     var body: some View {
         FeatureScreenContainer {
             VStack(alignment: .leading, spacing: 16) {
                 DSFeatureHeader(
                     title: "Issues",
-                    subtitle: "Active operational issues for this profile."
+                    subtitle: "Operational and audit hub for profile work."
                 ) {
                     DSRefreshButton(isLoading: isLoading) {
                         Task { await loadIssues() }
                     }
                 }
 
-                if isLoading {
-                    ProgressView("Loading active issues...")
+                VStack(alignment: .leading, spacing: 10) {
+                    Picker("Status", selection: $selectedFilter) {
+                        ForEach(IssueListFilter.allCases) { filter in
+                            Text(filter.title).tag(filter)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    HStack(spacing: 8) {
+                        DSBadge("Filter", secondaryText: selectedFilter.title, style: .info)
+
+                        if !issues.isEmpty {
+                            DSBadge("Count", secondaryText: "\(issues.count)", style: .neutral)
+                        }
+                    }
+                }
+
+                if isLoading && issues.isEmpty {
+                    ProgressView("Loading issues...")
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } else if let errorMessage {
                     EmptyStateView(
@@ -34,8 +53,8 @@ struct IssuesScreen: View {
                     )
                 } else if issues.isEmpty {
                     EmptyStateView(
-                        title: "No active issues",
-                        message: "Pending or suspended issues will appear here.",
+                        title: "No issues in this filter",
+                        message: "Issues matching the selected status filter will appear here.",
                         systemImage: "checkmark.circle"
                     )
                 } else {
@@ -49,7 +68,7 @@ struct IssuesScreen: View {
                 }
             }
         }
-        .task {
+        .task(id: selectedFilter) {
             await loadIssues()
         }
     }
@@ -82,9 +101,13 @@ struct IssuesScreen: View {
             }
         } trailing: {
             Button("Open") {
-                // TODO: Open issue details screen.
+                openIssue(issue)
             }
             .buttonStyle(.bordered)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture(count: 2) {
+            openIssue(issue)
         }
     }
 
@@ -120,12 +143,20 @@ struct IssuesScreen: View {
         errorMessage = nil
 
         do {
-            issues = try await feature.repository.getActiveIssues()
+            issues = try await feature.listIssues(filter: selectedFilter)
         } catch {
             errorMessage = error.localizedDescription
             issues = []
         }
 
         isLoading = false
+    }
+
+    private func openIssue(_ issue: Issue) {
+        guard let issueId = issue.id, !issueId.isEmpty else {
+            return
+        }
+
+        onOpenIssueDetail(issueId)
     }
 }

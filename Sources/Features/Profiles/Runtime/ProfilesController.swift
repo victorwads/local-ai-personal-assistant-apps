@@ -109,6 +109,12 @@ final class ProfilesController: ObservableObject {
         objectWillChange.send()
     }
 
+    func openIssueDetailWindow(profileId: String, issueId: String) async {
+        guard profile(for: profileId) != nil else { return }
+        await runtimeController.openIssueDetailWindow(profileId: profileId, issueId: issueId)
+        objectWillChange.send()
+    }
+
     func hideProfileWindow(profileId: String) {
         runtimeController.hideProfileWindow(profileId: profileId)
         objectWillChange.send()

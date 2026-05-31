@@ -1,7 +1,39 @@
 import Foundation
+import SwiftUI
+
+enum IssueListFilter: String, CaseIterable, Identifiable, Sendable {
+    case active
+    case suspended
+    case resolved
+    case cancelled
+    case all
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .active:
+            return "Active"
+        case .suspended:
+            return "Suspended"
+        case .resolved:
+            return "Resolved"
+        case .cancelled:
+            return "Cancelled"
+        case .all:
+            return "All"
+        }
+    }
+}
+
+protocol IssueRelatedDataProviding {
+    func listSensitiveDataUsageByIssueId(_ issueId: String) async throws -> [SensitiveDataUsage]
+    func listSentMessagesByIssueId(_ issueId: String) async throws -> [SentMessage]
+    func listClientVoiceMessagesByIssueId(_ issueId: String) async throws -> [ClientVoiceMessage]
+}
 
 @MainActor
-final class IssuesFeature: FeatureRuntime, IssueReferenceValidating {
+final class IssuesFeature: FeatureRuntime, IssueReferenceValidating, IssueRelatedDataProviding {
     override class var id: String { "issues" }
     let repository: FirestoreIssueRepository
     let timelineRepository: FirestoreIssueTimelineRepository
@@ -29,5 +61,60 @@ final class IssuesFeature: FeatureRuntime, IssueReferenceValidating {
 
     func validateIssueId(_ issueId: String) async throws -> Issue {
         try await repository.validateIssueId(issueId)
+    }
+
+    func listIssues(filter: IssueListFilter) async throws -> [Issue] {
+        switch filter {
+        case .active:
+            return try await repository.getActiveIssues()
+                .filter { !$0.finished && $0.status != .suspended }
+        case .suspended:
+            return try await repository.listAllIssues()
+                .filter { $0.status == .suspended }
+        case .resolved:
+            return try await repository.listAllIssues()
+                .filter { $0.status == .resolved }
+        case .cancelled:
+            return try await repository.listAllIssues()
+                .filter { $0.status == .cancelled }
+        case .all:
+            return try await repository.listAllIssues()
+        }
+    }
+
+    func issue(id: String) async throws -> Issue? {
+        try await repository.getById(id)
+    }
+
+    func makeIssueDetailWindowRequest(issueId: String) async throws -> FeatureWindowRequest {
+        let issue = try await issue(id: issueId)
+        let windowTitle = issue.map { "Issue: \($0.title)" } ?? "Issue: \(issueId)"
+
+        return FeatureWindowRequest(
+            id: "issue_\(issueId)",
+            title: windowTitle,
+            rootView: AnyView(
+                IssueDetailWindowView(
+                    issueId: issueId,
+                    issuesFeature: self
+                )
+            )
+        )
+    }
+
+    func listTimelineItems(issueId: String) async throws -> [IssueTimelineItem] {
+        try await timelineRepository.listItems(for: issueId)
+    }
+
+    func listSensitiveDataUsageByIssueId(_ issueId: String) async throws -> [SensitiveDataUsage] {
+        try await context.feature(SensitiveDataFeature.self).listUsageByIssueId(issueId)
+    }
+
+    func listSentMessagesByIssueId(_ issueId: String) async throws -> [SentMessage] {
+        try await context.feature(SentMessagesFeature.self).listByIssueId(issueId)
+    }
+
+    func listClientVoiceMessagesByIssueId(_ issueId: String) async throws -> [ClientVoiceMessage] {
+        try await context.feature(ClientVoiceFeature.self).listByIssueId(issueId)
     }
 }

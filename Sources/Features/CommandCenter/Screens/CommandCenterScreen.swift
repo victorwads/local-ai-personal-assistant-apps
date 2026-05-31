@@ -7,6 +7,7 @@ struct CommandCenterScreen: View {
     let windowState: ProfileWindowState
     let statusRegistry: ProfileRuntimeStatusRegistry
     let appFeatures: AppFeatures
+    let onOpenIssueDetail: (String) -> Void
 
     @State private var selectedRoute: CommandCenterRoute? = .myProfile
 
@@ -36,7 +37,8 @@ struct CommandCenterScreen: View {
                     profile: profile,
                     runtimeState: runtimeState,
                     windowState: windowState,
-                    appFeatures: appFeatures
+                    appFeatures: appFeatures,
+                    onOpenIssueDetail: onOpenIssueDetail
                 )
             }
             .frame(minWidth: 620, minHeight: 520)

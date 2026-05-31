@@ -68,6 +68,23 @@ final class ProfileRuntimeController: ObservableObject {
         objectWillChange.send()
     }
 
+    func openIssueDetailWindow(profileId: String, issueId: String) async {
+        guard let runtime = registry.runtime(for: profileId) else {
+            return
+        }
+
+        do {
+            try await runtime.openIssueDetailWindow(
+                issueId: issueId,
+                using: windowManager
+            )
+        } catch {
+            print("ProfileRuntimeController: failed to open issue detail window \(issueId): \(error)")
+        }
+
+        objectWillChange.send()
+    }
+
     func hideProfileWindow(profileId: String) {
         registry.runtime(for: profileId)?.hideWindow(using: windowManager)
         objectWillChange.send()

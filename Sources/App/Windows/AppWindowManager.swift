@@ -13,6 +13,7 @@ public final class AppWindowManager: ObservableObject, ProfileWindowManaging {
     private var rootContentFactory: (() -> AnyView)?
     private var profilesHomeWindowController: ProfilesHomeWindowController?
     private var profileWindowControllers: [String: ProfileWindowController] = [:]
+    private var featureWindowControllers: [String: ProfileWindowController] = [:]
     private var profilesHomeContentFactory: (() -> AnyView)?
     private weak var profilesController: ProfilesController?
 
@@ -122,6 +123,21 @@ public final class AppWindowManager: ObservableObject, ProfileWindowManaging {
         profileWindowControllers[profileId]?.hide()
     }
 
+    func showFeatureWindow(profileId: String, request: FeatureWindowRequest) {
+        let windowId = featureWindowId(profileId: profileId, featureWindowId: request.id)
+        if featureWindowControllers[windowId] == nil {
+            featureWindowControllers[windowId] = ProfileWindowController(
+                windowId: windowId,
+                title: request.title,
+                rootView: request.rootView,
+                visibilityTracker: visibilityTracker,
+                onVisibilityChange: { [weak self] in self?.syncDockVisibility() }
+            )
+        }
+
+        featureWindowControllers[windowId]?.show()
+    }
+
     public func isProfileWindowVisible(profileId: String) -> Bool {
         visibilityTracker.visibleWindowIds.contains("profile_\(profileId)")
     }
@@ -136,6 +152,9 @@ public final class AppWindowManager: ObservableObject, ProfileWindowManaging {
         for controller in profileWindowControllers.values {
             controller.hide()
         }
+        for controller in featureWindowControllers.values {
+            controller.hide()
+        }
         syncDockVisibility()
     }
 
@@ -143,7 +162,11 @@ public final class AppWindowManager: ObservableObject, ProfileWindowManaging {
         for controller in profileWindowControllers.values {
             controller.hide()
         }
+        for controller in featureWindowControllers.values {
+            controller.hide()
+        }
         profileWindowControllers.removeAll()
+        featureWindowControllers.removeAll()
         syncDockVisibility()
     }
 
@@ -157,5 +180,9 @@ public final class AppWindowManager: ObservableObject, ProfileWindowManaging {
         }
 
         return profilesController
+    }
+
+    private func featureWindowId(profileId: String, featureWindowId: String) -> String {
+        "profile_\(profileId)_feature_\(featureWindowId)"
     }
 }
