@@ -1,0 +1,44 @@
+import SwiftUI
+
+struct ChatListRowView: View {
+    let chat: Chat
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(chat.title)
+                    .font(.headline)
+                    .lineLimit(1)
+
+                Spacer(minLength: 6)
+
+                if let timeText = chat.lastMessageTimeText, !timeText.isEmpty {
+                    Text(timeText)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+
+            if let preview = chat.lastMessagePreview, !preview.isEmpty {
+                Text(preview)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            } else {
+                Text("No preview available")
+                    .font(.subheadline)
+                    .foregroundStyle(.tertiary)
+            }
+
+            HStack(spacing: 6) {
+                if chat.unreadCount > 0 {
+                    DSBadge("Unread", secondaryText: "\(chat.unreadCount)", systemImage: "envelope.badge", style: .warning)
+                }
+
+                DSBadge("WhatsApp", systemImage: "message", style: .info)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+}
