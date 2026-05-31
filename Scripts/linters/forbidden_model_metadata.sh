@@ -37,3 +37,5 @@ EOF
     done
   done < <(find "$SOURCES_DIR" -type f -path '*/Models/*.swift' ! -path "$SOURCES_DIR/Infrastructure/Firebase/*")
 }
+
+register_linter "Forbidden model metadata" check_forbidden_model_metadata

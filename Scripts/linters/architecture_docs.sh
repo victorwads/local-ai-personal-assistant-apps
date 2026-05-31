@@ -35,3 +35,5 @@ check_source_architecture_docs_are_linked() {
     fi
   done < <(find "$SOURCES_DIR" -type f -iname '*architecture*.md')
 }
+
+register_linter "Architecture docs linked" check_source_architecture_docs_are_linked

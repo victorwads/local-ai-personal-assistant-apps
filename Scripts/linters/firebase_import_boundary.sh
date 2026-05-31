@@ -39,14 +39,23 @@ check_firebase_import_boundary() {
     return 0
   fi
 
-  local swift_file
-  while IFS= read -r swift_file; do
-    [[ -z "$swift_file" ]] && continue
+  local regexes=()
+  local term
+  for term in "${FIREBASE_IMPORT_BOUNDARY_TERMS[@]}"; do
+    regexes+=("$(firebase_import_boundary_regex_for_term "$term")")
+  done
+
+  local combined_regex
+  combined_regex="$(IFS='|'; printf '%s' "${regexes[*]}")"
+
+  check_firebase_import_boundary_file_matches() {
+    local swift_file="$1"
+
+    [[ -z "$swift_file" ]] && return 0
 
     local relative_file
     relative_file="$(repo_relative_path "$swift_file")"
 
-    local term
     for term in "${FIREBASE_IMPORT_BOUNDARY_TERMS[@]}"; do
       local regex
       regex="$(firebase_import_boundary_regex_for_term "$term")"
@@ -64,5 +73,30 @@ EOF
 )"
       fi
     done
-  done < <(find "$SOURCES_DIR" -type f -name '*.swift' ! -path "$SOURCES_DIR/Infrastructure/*")
+  }
+
+  if command -v rg >/dev/null 2>&1; then
+    local rg_args=(-l -g '*.swift' -g '!Infrastructure/**')
+    local regex
+    for regex in "${regexes[@]}"; do
+      rg_args+=(-e "$regex")
+    done
+    while IFS= read -r swift_file; do
+      [[ -z "$swift_file" ]] && continue
+      check_firebase_import_boundary_file_matches "$SOURCES_DIR/${swift_file#./}"
+    done < <(
+      cd "$SOURCES_DIR"
+      rg "${rg_args[@]}" . || true
+    )
+  else
+    while IFS= read -r swift_file; do
+      [[ -z "$swift_file" ]] && continue
+
+      if grep -q -E -- "$combined_regex" "$swift_file"; then
+        check_firebase_import_boundary_file_matches "$swift_file"
+      fi
+    done < <(find "$SOURCES_DIR" -type f -name '*.swift' ! -path "$SOURCES_DIR/Infrastructure/*")
+  fi
 }
+
+register_linter "Firebase import boundary" check_firebase_import_boundary

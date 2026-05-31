@@ -5,6 +5,7 @@ RULE_SCOPES=()
 RULE_MESSAGES=()
 
 TEMP_FILES=()
+LAST_TEMP_FILE=""
 
 cleanup_fail_if_found_temp_files() {
   for file in "${TEMP_FILES[@]}"; do
@@ -13,6 +14,11 @@ cleanup_fail_if_found_temp_files() {
 }
 
 trap cleanup_fail_if_found_temp_files EXIT
+
+create_temp_file() {
+  LAST_TEMP_FILE="$(mktemp)"
+  TEMP_FILES+=("$LAST_TEMP_FILE")
+}
 
 fail_if_found() {
   local pattern="$1"
@@ -41,6 +47,11 @@ register_default_fail_if_found_rules() {
   fail_if_found "do not use" "Delete unused files instead of marking them do not use."
 }
 
+run_fail_if_found_linter() {
+  register_default_fail_if_found_rules
+  verify_fail_if_found_rules
+}
+
 verify_fail_if_found_rules() {
   if [[ ${#RULE_PATTERNS[@]} -eq 0 ]]; then
     return 0
@@ -51,8 +62,8 @@ verify_fail_if_found_rules() {
   fi
 
   local patterns_file
-  patterns_file="$(mktemp)"
-  TEMP_FILES+=("$patterns_file")
+  create_temp_file
+  patterns_file="$LAST_TEMP_FILE"
 
   local pattern
   for pattern in "${RULE_PATTERNS[@]}"; do
@@ -60,8 +71,8 @@ verify_fail_if_found_rules() {
   done
 
   local matched_files_file
-  matched_files_file="$(mktemp)"
-  TEMP_FILES+=("$matched_files_file")
+  create_temp_file
+  matched_files_file="$LAST_TEMP_FILE"
 
   grep -R -l -F -f "$patterns_file" "$SOURCES_DIR" > "$matched_files_file" || true
 
@@ -105,3 +116,5 @@ EOF
     done
   done < "$matched_files_file"
 }
+
+register_linter "Forbidden text patterns" run_fail_if_found_linter

@@ -19,6 +19,7 @@ This project uses XcodeGen. Treat `AIAssistantHub.xcodeproj` as generated build 
 - Never manually edit generated files under `*.xcodeproj`, `project.pbxproj`, `*.xcworkspace`, `xcuserdata`, or generated scheme files.
 - Make project configuration changes in `project.yml`, source files, scripts, or resources.
 - For validation, run the repo's check/build/restart script (currently `scripts/check_build_and_restart.sh`). Do not run `xcodebuild` manually.
+- When linter scripts or rules change, build validation must be triggered by a human (not by automation). This is a deliberate safety gate to ensure lint-rule changes get reviewed before a build is run.
 
 ## Shared UI design system
 
