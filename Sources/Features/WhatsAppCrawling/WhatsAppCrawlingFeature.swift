@@ -12,6 +12,8 @@ final class WhatsAppCrawlingFeature: FeatureRuntime {
     private(set) var nativeSettings: WhatsAppNativeSettingsWrapper
     private(set) var logStore: WhatsAppCrawlingLogStore
     private(set) var webViewService: WebViewWhatsAppCrawlingService
+    private(set) var pollingService: WhatsAppCrawlingPollingService?
+    private(set) var messageSender: any WhatsAppMessageSending
 
     required init(context: FeatureContext) {
         guard let scope = context.profileContext.scope else {
@@ -32,6 +34,12 @@ final class WhatsAppCrawlingFeature: FeatureRuntime {
         self.nativeSettings = nativeSettings
         self.logStore = logStore
         self.webViewService = webViewService
+        self.pollingService = nil
+        self.messageSender = WebViewMessageSender(
+            webViewService: webViewService,
+            pollingService: nil,
+            logStore: logStore
+        )
         super.init(context: context)
 
         context.settings.sectionRegistry.register(
@@ -58,6 +66,12 @@ final class WhatsAppCrawlingFeature: FeatureRuntime {
                 settings: crawlingSettings,
                 webViewService: webViewService,
                 chatRepository: chatRepository,
+                logStore: logStore
+            )
+            self.pollingService = crawlingService
+            self.messageSender = WebViewMessageSender(
+                webViewService: webViewService,
+                pollingService: crawlingService,
                 logStore: logStore
             )
 

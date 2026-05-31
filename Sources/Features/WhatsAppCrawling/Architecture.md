@@ -102,3 +102,34 @@ At a high level, the runtime loop looks like this:
 5. expose the resulting state through MCP
 
 This is what makes the system feel more like a runtime than a thin server.
+
+## Ownership boundary
+
+- WhatsAppCrawling owns transport-specific WhatsApp Web interaction, crawling, parsing, and persisted chat/message observation.
+- SentMessages owns outbound audit history, assistant outbound identity settings, and the `send_message` MCP tool.
+- Chats owns persisted chat/message data plus read/listing tools.
+- WhatsAppCrawling now owns the real WebView transport-specific send behavior and outbound message observation.
+- SentMessages will call WhatsAppCrawling to send and observe outbound messages, while WhatsAppCrawling continues to own only the transport-specific interaction and observation behavior.
+
+## Public send contract
+
+WhatsAppCrawling exposes a feature-level message sending contract for future outbound transport:
+
+- `WhatsAppMessageSending`
+- `WhatsAppMessageSendRequest`
+- `WhatsAppMessageSendResult`
+- `WhatsAppMessageSendReceipt`
+- `WhatsAppMessageSendingError`
+
+`WhatsAppCrawlingFeature.messageSender` is the entrypoint SentMessages should depend on for outbound WhatsApp transport.
+
+Current runtime behavior is:
+
+- sending pauses crawling, but does not tear down or pause the underlying WebView
+- sending remains transport-specific to WhatsAppCrawling
+- one request may send multiple messages to the same chat
+- after send actions complete, WhatsAppCrawling waits until the messages appear in the active chat view
+- successful observation returns the observed chat message ids in `WhatsAppMessageSendReceipt`
+- crawling resumes afterward, including when sending fails
+- if some messages are not observed, the send API returns a partial result with missing receipt ids instead of inventing ids
+- SentMessages owns outbound audit/status records; WhatsAppCrawling only sends and observes
